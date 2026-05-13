@@ -2,7 +2,7 @@ export const SECTIONS = [
   {
     id: "commercial", title: "Commercial & contracting",
     tasks: [
-      { id:"c1", done:false, name:"Send Renato WhatsApp — confirm proposal received, ask for signature timeline", sub:"Keep warm, not salesy. One sentence.", tags:["ready"],
+      { id:"c1", done:true, name:"Send Renato WhatsApp — confirm proposal received, ask for signature timeline", sub:"Keep warm, not salesy. One sentence.", tags:["ready"],
         why:"The proposal has been sent but no response yet. Renato is relationship-driven — a WhatsApp message is warmer than a follow-up email and gets a faster response. The commercial clock doesn't start until he signs.",
         how:["Open WhatsApp and find Renato's chat","Send: 'Renato, buen comienzo de semana. Tengo todo listo para arrancar — solo espero la firma para comenzar. ¿Hay algo que necesiten de mi parte antes de proceder?'","Do NOT mention money or the adelanto — let him bring it up","If no reply by Wednesday, send one more gentle nudge"] },
       { id:"c2", done:false, name:"Formal proposal reviewed and signed by Renato & Jean Paul", sub:"Propuesta_Global_Transport_Pipeline1_Cotizador.md already sent", tags:[],
@@ -26,19 +26,19 @@ export const SECTIONS = [
     id: "basc", title: "BASC / ISO vendor registration",
     tasks: [
       { id:"b1", done:true, name:"BASC/ISO homologación docs prepared and ready to send", sub:"Barney confirmed ready as of May 9", tags:["ready"], why:"Completed.", how:["Done ✓"] },
-      { id:"b2", done:false, name:"Send BASC/ISO docs to Vania", sub:"Don't hold hostage to commercial conversation — send this week", tags:["ready"],
+      { id:"b2", done:true, name:"Send BASC/ISO docs to Vania", sub:"Don't hold hostage to commercial conversation — send this week", tags:["ready"],
         why:"Sending docs to Vania before the proposal is even signed signals that TimeBack AI operates at Global Transport's standard. It builds trust with the most compliance-focused person in the room.",
         how:["Email Vania directly — don't wait for the signature","Subject: 'Documentación para inscripción como proveedor BASC/ISO — TimeBack AI'","Body: 'Vania, adjunto la documentación. Quedo a tu disposición si necesitas algo adicional.'","Attach all prepared docs","CC Renato so he sees it happened"] },
-      { id:"b3", done:false, name:"Vania initiates vendor registration process", sub:"She manages the BASC/ISO onboarding on their side", tags:["client"],
+      { id:"b3", done:true, name:"Vania initiates vendor registration process", sub:"She manages the BASC/ISO onboarding on their side", tags:["client"],
         why:"Once she receives the docs, she starts the formal registration internally. You can't do this for her but you can make it easy.",
         how:["Follow up with Vania 3-4 days after sending docs if no acknowledgment","Ask if she needs anything else from your side","Keep Renato informed — he cares about this process"] },
-      { id:"b4", done:false, name:"Signed BASC compliance declaration submitted", sub:"Contractual commitment to BASC security provisions required", tags:[],
+      { id:"b4", done:true, name:"Signed BASC compliance declaration submitted", sub:"Contractual commitment to BASC security provisions required", tags:[],
         why:"BASC requires vendors to contractually commit to their security provisions. Non-negotiable for Global Transport — their certification depends on their vendors being compliant.",
         how:["Review the BASC compliance declaration Vania sends","Sign as Barney Elliott or TimeBack AI SAC depending on entity chosen","Return signed copy within the deadline she specifies","Keep a copy in Client Data/ folder"] },
-      { id:"b5", done:false, name:"Data handling questionnaire completed", sub:"Hosting region, credential storage, access controls — tie to build design", tags:[],
+      { id:"b5", done:true, name:"Data handling questionnaire completed", sub:"Hosting region, credential storage, access controls — tie to build design", tags:[],
         why:"BASC auditors will check how GT's vendors handle their data. Answers must match how the cotizador is actually built — hosting region, who has access, how credentials are stored.",
         how:["Answer based on the actual build design","Hosting region: Vercel = US by default — document this","Credentials: secrets manager, no plaintext — already in the design","List who has access and their roles","Return to Vania within her deadline"] },
-      { id:"b6", done:false, name:"Vendor registration complete — TimeBack AI approved as GT supplier", sub:"Required before full operational go-live", tags:[],
+      { id:"b6", done:true, name:"Vendor registration complete — TimeBack AI approved as GT supplier", sub:"Required before full operational go-live", tags:[],
         why:"Full operational go-live requires TimeBack AI to be an approved supplier. This is the final BASC gate before the cotizador runs in production.",
         how:["Confirm with Vania that registration is complete","Get written confirmation for your records","Note the supplier ID or reference number they assign"] },
     ]
