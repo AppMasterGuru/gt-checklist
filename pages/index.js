@@ -116,25 +116,9 @@ export default function Dashboard() {
               GLOBAL TRANSPORT × TIMEBACK AI
             </span>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <span style={{ fontFamily: 'var(--mono)', fontSize: '11px', color: 'rgba(255,255,255,.45)' }}>
-              pipeline #1
-            </span>
-            <button
-              onClick={loadMemory}
-              style={{
-                fontFamily: 'var(--mono)', fontSize: '10px', fontWeight: 600,
-                letterSpacing: '.06em', textTransform: 'uppercase',
-                padding: '3px 10px', borderRadius: '20px', border: 'none',
-                cursor: 'pointer',
-                background: '#2DD4BF',
-                color: '#05080F',
-                transition: 'all .15s',
-              }}
-            >
-              ↺ refresh
-            </button>
-          </div>
+          <span style={{ fontFamily: 'var(--mono)', fontSize: '11px', color: 'rgba(255,255,255,.45)' }}>
+            pipeline #1
+          </span>
         </div>
 
         <div style={{ maxWidth: '780px', margin: '0 auto', padding: '32px 24px 64px' }}>
