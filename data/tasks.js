@@ -150,6 +150,8 @@ export const SECTIONS = [
       { id:"bi26", done:true, name:"Vista Clásica / Vista Moderna toggle — working in UI", sub:"Both views verified functional", tags:[], why:"Completed.", how:["Done ✓"] },
       { id:"bi27", done:true, name:"/demo-reset route + Send button wired", sub:"Demo-reset clears state for clean demos; Send button triggers outbound draft", tags:[], why:"Completed.", how:["Done ✓"] },
       { id:"bi28", done:true, name:"Audit log CSV export — GET /audit/export.csv", sub:"Returns correctly-headed CSV; tested in test_features.py", tags:[], why:"Completed.", how:["Done ✓"] },
+      { id:"bi29", done:true, name:"Demo simulation script — 3/3 real-data quotes verified", sub:"scripts/run_demo_simulation.py: LCL Hamburg 22%, Aéreo LAX 20%, FCL Callao 18% — all pass (commit 9dfa4e6)", tags:[], why:"Completed.", how:["Done ✓"] },
+      { id:"bi30", done:true, name:"Demo seed data — /demo-reset?seed=true pre-loads full lifecycle", sub:"3 quotes inserted in PENDING/APPROVED/SENT states via state machine transitions (commit 9dfa4e6)", tags:[], why:"Completed.", how:["Done ✓"] },
     ]
   },
   {
