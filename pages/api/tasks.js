@@ -1,40 +1,18 @@
 /**
  * tasks.js
- * GET  /api/tasks  — returns current task state
+ * GET  /api/tasks  — returns current task state from Redis
  * POST /api/tasks  — toggles a single task { id, done }
  *
- * State is stored in Redis (gt:state key) so it persists across Vercel
- * redeploys. Falls back to static task defaults if Redis is not configured.
- *
- * First-load seeding: if Redis is empty on GET, the current done states
- * from data/tasks.js are written to Redis immediately, so the state is
- * locked in and survives all subsequent redeploys without resetting.
+ * State is stored in Redis (gt:state key) and populated by sync_checklist.py.
+ * MEMORY.md is the authoritative source — this endpoint is a simple Redis
+ * read/write layer for task state persistence.
  */
 
-import { redisGet, redisSet, hasRedis } from '../../lib/redis';
-import { SECTIONS } from '../../data/tasks';
-
-function defaultState() {
-  const state = {};
-  SECTIONS.forEach(s => s.tasks.forEach(t => { state[t.id] = t.done; }));
-  return state;
-}
+import { redisGet, redisSet } from '../../lib/redis';
 
 export default async function handler(req, res) {
   if (req.method === 'GET') {
-    let state = await redisGet('gt:state');
-
-    if (!state) {
-      // Redis is empty (first load after connecting, or after a manual flush).
-      // Seed from data/tasks.js and write to Redis immediately so this only
-      // happens once — subsequent redeploys won't reset anything.
-      state = defaultState();
-      if (hasRedis) {
-        await redisSet('gt:state', state);
-        console.log('[tasks] Seeded Redis with defaultState from data/tasks.js');
-      }
-    }
-
+    const state = (await redisGet('gt:state')) || {};
     return res.status(200).json({ state });
   }
 
@@ -43,7 +21,7 @@ export default async function handler(req, res) {
     if (!id || typeof done !== 'boolean') {
       return res.status(400).json({ error: 'Missing id or done' });
     }
-    const state = (await redisGet('gt:state')) || defaultState();
+    const state = (await redisGet('gt:state')) || {};
     state[id] = done;
     await redisSet('gt:state', state);
     return res.status(200).json({ ok: true, state });

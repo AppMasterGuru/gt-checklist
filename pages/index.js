@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import Head from 'next/head';
-import { SECTIONS } from '../data/tasks';
 
 const TAG_CONFIG = {
   ready: { label: 'ready to build', bg: '#e6f4ea', color: '#1e7e34' },
@@ -23,80 +22,54 @@ function Tag({ tag }) {
 }
 
 export default function Dashboard() {
-  const [state, setState] = useState({});
+  const [sections, setSections] = useState([]);
   const [collapsed, setCollapsed] = useState({});
   const [expanded, setExpanded] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(null);
-  const [lastUpdated, setLastUpdated] = useState(null);
-  const [source, setSource] = useState('static'); // 'static' | 'memory'
-  const [sections, setSections] = useState(SECTIONS);
   const [memoryLastModified, setMemoryLastModified] = useState(null);
   const [memoryError, setMemoryError] = useState(null);
   const [agentLog, setAgentLog] = useState([]);
-
-  useEffect(() => {
-    fetch('/api/tasks')
-      .then(r => r.json())
-      .then(({ state }) => { setState(state); setLoading(false); });
-    // Load agent activity log
-    fetch('/api/agent-log')
-      .then(r => r.ok ? r.json() : { log: [] })
-      .then(({ log }) => setAgentLog(log || []))
-      .catch(() => {});
-    // Poll for new agent pushes every 30 seconds
-    const interval = setInterval(() => {
-      fetch('/api/tasks').then(r => r.json()).then(({ state }) => setState(state)).catch(() => {});
-      fetch('/api/agent-log').then(r => r.ok ? r.json() : { log: [] }).then(({ log }) => setAgentLog(log || [])).catch(() => {});
-    }, 30000);
-    return () => clearInterval(interval);
-  }, []);
 
   async function loadMemory() {
     setMemoryError(null);
     try {
       const r = await fetch('/api/memory');
       const data = await r.json();
-      if (!r.ok) {
-        setMemoryError(data.error || 'Failed to load MEMORY.md');
-        return;
+      if (!r.ok || !data.sections?.length) {
+        setMemoryError(data.error || 'No data in Redis. Run: python3 scripts/sync_checklist.py');
+        setSections([]);
+      } else {
+        setSections(data.sections);
+        setMemoryLastModified(data.lastModified);
       }
-      setSections(data.sections);
-      setMemoryLastModified(data.lastModified);
-      setSource('memory');
     } catch (err) {
       setMemoryError(err.message);
+      setSections([]);
+    } finally {
+      setLoading(false);
     }
   }
 
-  function loadStatic() {
-    setSections(SECTIONS);
-    setMemoryLastModified(null);
-    setMemoryError(null);
-    setSource('static');
-  }
+  useEffect(() => {
+    loadMemory();
+    fetch('/api/agent-log')
+      .then(r => r.ok ? r.json() : { log: [] })
+      .then(({ log }) => setAgentLog(log || []))
+      .catch(() => {});
+
+    const interval = setInterval(() => {
+      loadMemory();
+      fetch('/api/agent-log').then(r => r.ok ? r.json() : { log: [] }).then(({ log }) => setAgentLog(log || [])).catch(() => {});
+    }, 30000);
+    return () => clearInterval(interval);
+  }, []);
 
   const allTasks = sections.flatMap(s => s.tasks);
-  const doneCount = allTasks.filter(t => state[t.id]).length;
+  const doneCount = allTasks.filter(t => t.done).length;
   const total = allTasks.length;
   const pct = total ? Math.round((doneCount / total) * 100) : 0;
-  const blockedCount = allTasks.filter(t => t.tags?.includes('blocked') && !state[t.id]).length;
-  const readyCount = allTasks.filter(t => t.tags?.includes('ready') && !state[t.id]).length;
-
-  async function toggle(id, current) {
-    const next = !current;
-    setState(prev => ({ ...prev, [id]: next }));
-    setSaving(id);
-    try {
-      await fetch('/api/tasks', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id, done: next }),
-      });
-      setLastUpdated(new Date());
-    } catch {}
-    setSaving(null);
-  }
+  const blockedCount = allTasks.filter(t => t.tags?.includes('blocked') && !t.done).length;
+  const readyCount = allTasks.filter(t => t.tags?.includes('ready') && !t.done).length;
 
   function toggleSection(id) {
     setCollapsed(prev => ({ ...prev, [id]: !prev[id] }));
@@ -124,7 +97,7 @@ export default function Dashboard() {
           *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
           :root { --font: 'Sora', sans-serif; --mono: 'IBM Plex Mono', monospace; }
           body { background: #f8f7f4; font-family: var(--font); color: #111; -webkit-font-smoothing: antialiased; }
-          input[type=checkbox] { accent-color: #1B3A6B; cursor: pointer; flex-shrink: 0; }
+          input[type=checkbox] { accent-color: #1B3A6B; flex-shrink: 0; }
           .section-hdr:hover { background: #f0ede8 !important; }
           .task-body-click:hover { background: #f5f3ef !important; }
           @keyframes slideDown { from { opacity:0; transform:translateY(-4px); } to { opacity:1; transform:translateY(0); } }
@@ -145,21 +118,21 @@ export default function Dashboard() {
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <span style={{ fontFamily: 'var(--mono)', fontSize: '11px', color: 'rgba(255,255,255,.45)' }}>
-              {lastUpdated ? `saved ${lastUpdated.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}` : 'pipeline #1'}
+              pipeline #1
             </span>
             <button
-              onClick={source === 'static' ? loadMemory : loadStatic}
+              onClick={loadMemory}
               style={{
                 fontFamily: 'var(--mono)', fontSize: '10px', fontWeight: 600,
                 letterSpacing: '.06em', textTransform: 'uppercase',
                 padding: '3px 10px', borderRadius: '20px', border: 'none',
                 cursor: 'pointer',
-                background: source === 'memory' ? '#2DD4BF' : 'rgba(255,255,255,0.12)',
-                color: source === 'memory' ? '#05080F' : 'rgba(255,255,255,0.7)',
+                background: '#2DD4BF',
+                color: '#05080F',
                 transition: 'all .15s',
               }}
             >
-              {source === 'memory' ? '● MEMORY.md' : 'MEMORY.md'}
+              ↺ refresh
             </button>
           </div>
         </div>
@@ -176,54 +149,58 @@ export default function Dashboard() {
           </div>
 
           {/* Memory source info bar */}
-          {source === 'memory' && (
+          {!memoryError && (
             <div style={{ marginBottom: '16px', padding: '10px 14px', borderRadius: '8px', background: '#e6f4ea', border: '1px solid #bbdfc8', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <span style={{ fontFamily: 'var(--mono)', fontSize: '11px', color: '#1e7e34' }}>
                 ● Live from MEMORY.md
                 {memoryLastModified && ` · Last modified ${new Date(memoryLastModified).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}`}
               </span>
-              <button onClick={loadMemory} style={{ fontFamily: 'var(--mono)', fontSize: '10px', color: '#1e7e34', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>
-                refresh
-              </button>
             </div>
           )}
           {memoryError && (
-            <div style={{ marginBottom: '16px', padding: '10px 14px', borderRadius: '8px', background: '#fdecea', border: '1px solid #f5c6c2' }}>
-              <span style={{ fontFamily: 'var(--mono)', fontSize: '11px', color: '#b91c1c' }}>
-                ✕ {memoryError}
-              </span>
+            <div style={{ marginBottom: '16px', padding: '12px 16px', borderRadius: '8px', background: '#fdecea', border: '1px solid #f5c6c2' }}>
+              <div style={{ fontFamily: 'var(--mono)', fontSize: '11px', color: '#b91c1c', marginBottom: '6px' }}>
+                ✕ Dashboard not synced
+              </div>
+              <div style={{ fontSize: '12px', color: '#7f1d1d', lineHeight: 1.5 }}>
+                Run <code style={{ background: '#fee2e2', padding: '1px 5px', borderRadius: '3px' }}>python3 scripts/sync_checklist.py</code> from the <code style={{ background: '#fee2e2', padding: '1px 5px', borderRadius: '3px' }}>cotizador/</code> directory to push MEMORY.md to Redis.
+              </div>
             </div>
           )}
 
-          {/* Stats */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginBottom: '32px' }}>
-            {[
-              { label: 'Done', value: doneCount, accent: '#1B3A6B' },
-              { label: 'Total', value: total, accent: '#374151' },
-              { label: 'Complete', value: `${pct}%`, accent: pct === 100 ? '#16a34a' : '#1B3A6B' },
-              { label: 'Blocked', value: blockedCount, accent: '#b91c1c' },
-            ].map(({ label, value, accent }) => (
-              <div key={label} style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: '10px', padding: '16px', textAlign: 'center' }}>
-                <div style={{ fontSize: '26px', fontWeight: 600, color: accent, fontFamily: 'var(--mono)', lineHeight: 1 }}>{value}</div>
-                <div style={{ fontSize: '11px', color: '#9ca3af', marginTop: '4px', textTransform: 'uppercase', letterSpacing: '.06em' }}>{label}</div>
+          {/* Stats — only show when data is loaded */}
+          {total > 0 && (
+            <>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginBottom: '32px' }}>
+                {[
+                  { label: 'Done', value: doneCount, accent: '#1B3A6B' },
+                  { label: 'Total', value: total, accent: '#374151' },
+                  { label: 'Complete', value: `${pct}%`, accent: pct === 100 ? '#16a34a' : '#1B3A6B' },
+                  { label: 'Blocked', value: blockedCount, accent: '#b91c1c' },
+                ].map(({ label, value, accent }) => (
+                  <div key={label} style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: '10px', padding: '16px', textAlign: 'center' }}>
+                    <div style={{ fontSize: '26px', fontWeight: 600, color: accent, fontFamily: 'var(--mono)', lineHeight: 1 }}>{value}</div>
+                    <div style={{ fontSize: '11px', color: '#9ca3af', marginTop: '4px', textTransform: 'uppercase', letterSpacing: '.06em' }}>{label}</div>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
 
-          {/* Progress bar */}
-          <div style={{ background: '#e5e7eb', borderRadius: '4px', height: '5px', marginBottom: '8px' }}>
-            <div style={{ background: '#1B3A6B', borderRadius: '4px', height: '5px', width: `${pct}%`, transition: 'width .5s ease' }} />
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '32px' }}>
-            <span style={{ fontSize: '11px', color: '#9ca3af', fontFamily: 'var(--mono)' }}>{readyCount} tasks ready to build now</span>
-            <span style={{ fontSize: '11px', color: '#9ca3af', fontFamily: 'var(--mono)' }}>{blockedCount} blocked on client</span>
-          </div>
+              {/* Progress bar */}
+              <div style={{ background: '#e5e7eb', borderRadius: '4px', height: '5px', marginBottom: '8px' }}>
+                <div style={{ background: '#1B3A6B', borderRadius: '4px', height: '5px', width: `${pct}%`, transition: 'width .5s ease' }} />
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '32px' }}>
+                <span style={{ fontSize: '11px', color: '#9ca3af', fontFamily: 'var(--mono)' }}>{readyCount} tasks ready to build now</span>
+                <span style={{ fontSize: '11px', color: '#9ca3af', fontFamily: 'var(--mono)' }}>{blockedCount} blocked on client</span>
+              </div>
+            </>
+          )}
 
           {/* Sections */}
           {sections.map((sec, sIdx) => {
             const tasks = sec.tasks;
-            const secDone = tasks.filter(t => state[t.id]).length;
-            const secBlocked = tasks.filter(t => t.tags?.includes('blocked') && !state[t.id]).length;
+            const secDone = tasks.filter(t => t.done).length;
+            const secBlocked = tasks.filter(t => t.tags?.includes('blocked') && !t.done).length;
             const isOpen = !collapsed[sec.id];
             const allDone = secDone === tasks.length;
 
@@ -255,24 +232,20 @@ export default function Dashboard() {
                 {isOpen && (
                   <div style={{ borderTop: '1px solid #f3f4f6' }}>
                     {tasks.map((task, tIdx) => {
-                      const done = !!state[task.id];
-                      const isSaving = saving === task.id;
+                      const done = task.done;
                       const isExpanded = expanded === task.id;
 
                       return (
                         <div key={task.id} style={{ borderBottom: tIdx < tasks.length - 1 ? '1px solid #f3f4f6' : 'none' }}>
                           {/* Task row */}
                           <div style={{ display: 'flex', alignItems: 'flex-start' }}>
-                            {/* Checkbox area — click to tick */}
-                            <div
-                              onClick={() => toggle(task.id, done)}
-                              style={{ padding: '13px 12px 13px 18px', cursor: 'pointer', display: 'flex', alignItems: 'flex-start', paddingTop: '15px', flexShrink: 0 }}
-                            >
+                            {/* Checkbox — read-only, reflects MEMORY.md state */}
+                            <div style={{ padding: '13px 12px 13px 18px', display: 'flex', alignItems: 'flex-start', paddingTop: '15px', flexShrink: 0 }}>
                               <input
                                 type="checkbox"
                                 checked={done}
-                                onChange={() => {}}
-                                style={{ width: '15px', height: '15px', opacity: isSaving ? .5 : 1, cursor: 'pointer' }}
+                                readOnly
+                                style={{ width: '15px', height: '15px', cursor: 'default' }}
                               />
                             </div>
 
@@ -336,6 +309,13 @@ export default function Dashboard() {
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                   <span style={{ fontSize: '18px', color: '#16a34a' }}>✓</span>
                                   <span style={{ fontSize: '13px', color: '#16a34a', fontWeight: 500 }}>{task.how?.[0] || 'Completed'}</span>
+                                </div>
+                              )}
+
+                              {/* MEMORY.md tasks have no detail panel content — show task ID for traceability */}
+                              {!task.why && (!task.how || task.how.length === 0) && (
+                                <div style={{ fontSize: '12px', color: '#9ca3af', fontFamily: 'var(--mono)' }}>
+                                  {task.id} · {task.section}
                                 </div>
                               )}
                             </div>
