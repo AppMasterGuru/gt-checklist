@@ -179,7 +179,7 @@ function Section({ sec, sIdx, colorMode }) {
             const isExpanded = expandedId === task.id;
             const accent = rowAccent(task.colorTag);
             return (
-              <div key={task.id} style={{ borderBottom: tIdx < tasks.length - 1 ? '1px solid #f3f4f6' : 'none', borderLeft: `3px solid ${accent}` }}>
+              <div key={task.id} style={{ borderBottom: tIdx < tasks.length - 1 ? '1px solid #f3f4f6' : 'none', borderLeft: task.colorTag ? `4px solid ${accent}` : '4px solid transparent' }}>
                 <div style={{ display: 'flex', alignItems: 'flex-start' }}>
                   <div style={{ padding: '13px 12px 13px 15px', display: 'flex', alignItems: 'flex-start', paddingTop: '15px', flexShrink: 0 }}>
                     <input type="checkbox" checked={done} readOnly style={{ width: '15px', height: '15px', cursor: 'default', accentColor: C.navy }} />
@@ -273,7 +273,7 @@ function BaselineTab() {
             display: 'flex', alignItems: 'center', gap: '12px',
             padding: '11px 18px',
             borderBottom: i < BASELINE.length - 1 ? '1px solid #f3f4f6' : 'none',
-            borderLeft: `3px solid ${C.navy}`,
+            borderLeft: `4px solid ${C.navy}`,
             background: item.done ? '#fafaf9' : '#fff',
           }}>
             <span style={{ fontFamily: 'var(--mono)', fontSize: '9px', color: '#d1d5db', width: '28px', flexShrink: 0, textAlign: 'right' }}>
@@ -355,7 +355,7 @@ function DeltaTab({ sections }) {
             display: 'flex', alignItems: 'center', gap: '12px',
             padding: '12px 18px',
             borderBottom: i < deltaItems.length - 1 ? '1px solid #f3f4f6' : 'none',
-            borderLeft: `3px solid ${task.colorTag === 'added' ? C.orange : C.green}`,
+            borderLeft: `4px solid ${task.colorTag === 'added' ? C.orange : C.green}`,
           }}>
             <ColorBadge colorTag={task.colorTag} />
             <span style={{ fontSize: '13.5px', color: task.done ? '#9ca3af' : '#111', textDecoration: task.done ? 'line-through' : 'none', flex: 1 }}>
