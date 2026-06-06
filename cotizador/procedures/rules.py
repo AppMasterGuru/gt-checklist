@@ -268,6 +268,51 @@ def validate_cargo_measurements(weight_kg: float | None, volume_cbm: float | Non
     )
 
 
+# ── GT-P-016: Risk score classification (GT-SIG-PR-002 §5) ──────────────────
+# Source: GT-SIG-PR-002 §5 — P×I ≥ 9 = Crítico (Prioridad 1),
+#         P×I < 9 = Tolerable (Prioridad 2).
+
+RISK_CRITICAL_THRESHOLD: int = 9
+
+
+def validate_risk_score(probability: int, impact: int) -> tuple[str, str]:
+    """
+    GT-P-016: Classify a risk by its probability × impact score.
+
+    Returns:
+        (classification, priority_level)
+        e.g. ("Crítico", "Prioridad 1") or ("Tolerable", "Prioridad 2")
+    """
+    score = probability * impact
+    if score >= RISK_CRITICAL_THRESHOLD:
+        return "Crítico", "Prioridad 1"
+    return "Tolerable", "Prioridad 2"
+
+
+# ── GT-P-017: Risk matrix cost currency ──────────────────────────────────────
+# Source: GT-SIG-PR-002 §6 — cost figures in the risk matrix must use USD or
+#         PEN (Soles). Foreign currencies require conversion before entry.
+
+ALLOWED_RISK_CURRENCIES: frozenset[str] = frozenset({"USD", "PEN", "SOL"})
+
+
+def validate_risk_matrix_currency(currency: str) -> tuple[bool, str]:
+    """
+    GT-P-017: Risk matrix cost figures must be denominated in USD or PEN/SOL.
+
+    Returns:
+        (True, "") if valid, (False, reason) if not.
+    """
+    normalised = (currency or "").strip().upper()
+    if normalised in ALLOWED_RISK_CURRENCIES:
+        return True, ""
+    return (
+        False,
+        f"GT-P-017: Currency {currency!r} is not accepted in risk matrices. "
+        f"Use one of: {', '.join(sorted(ALLOWED_RISK_CURRENCIES))}.",
+    )
+
+
 # ── Aggregate validator ───────────────────────────────────────────────────────
 
 class ProcedureViolation(Exception):

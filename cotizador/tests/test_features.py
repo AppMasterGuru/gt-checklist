@@ -528,3 +528,145 @@ def test_run_listener_enabled_creates_audit_entry(flask_client, monkeypatch):
     assert detail["status"] == "OK"
     assert detail["emails_processed"] == 1
     assert detail["acks_queued"] == 1
+
+
+# ── Additional warnings coverage ─────────────────────────────────────────────
+
+def test_warnings_perishable_no_temp():
+    """Perishable cargo without temperature info fires PERISHABLE_NO_TEMP yellow."""
+    q = _quote({"cargo_description": "flores frescas de exportación"})
+    warnings = check_quote_warnings(q)
+    codes = [w["code"] for w in warnings]
+    assert "PERISHABLE_NO_TEMP" in codes
+    warn = next(w for w in warnings if w["code"] == "PERISHABLE_NO_TEMP")
+    assert warn["level"] == "yellow"
+
+
+def test_warnings_perishable_with_temp_no_warning():
+    """Perishable cargo with temperature info does NOT fire PERISHABLE_NO_TEMP."""
+    q = _quote({"cargo_description": "flores frescas temperatura controlada 4°C"})
+    warnings = check_quote_warnings(q)
+    codes = [w["code"] for w in warnings]
+    assert "PERISHABLE_NO_TEMP" not in codes
+
+
+def test_warnings_no_client_email():
+    """Quote missing client_email fires NO_CLIENT_EMAIL yellow warning."""
+    q = _quote({"client_email": ""})
+    warnings = check_quote_warnings(q)
+    codes = [w["code"] for w in warnings]
+    assert "NO_CLIENT_EMAIL" in codes
+    warn = next(w for w in warnings if w["code"] == "NO_CLIENT_EMAIL")
+    assert warn["level"] == "yellow"
+
+
+def test_warnings_high_density():
+    """Weight/volume giving density > 2000 kg/m³ fires HIGH_DENSITY yellow."""
+    q = _quote({"weight_kg": 10000.0, "volume_cbm": 1.0})
+    warnings = check_quote_warnings(q)
+    codes = [w["code"] for w in warnings]
+    assert "HIGH_DENSITY" in codes
+
+
+def test_warnings_low_density():
+    """Weight/volume giving density < 50 kg/m³ fires LOW_DENSITY yellow."""
+    q = _quote({"weight_kg": 10.0, "volume_cbm": 5.0})
+    warnings = check_quote_warnings(q)
+    codes = [w["code"] for w in warnings]
+    assert "LOW_DENSITY" in codes
+
+
+def test_warnings_zero_venta():
+    """venta_json total_usd = 0 fires ZERO_VENTA red warning."""
+    q = _quote({})
+    q["venta_json"] = {"total_usd": 0, "line_items": [], "margin_pct": 0.25, "validity_days": 15}
+    warnings = check_quote_warnings(q)
+    codes = [w["code"] for w in warnings]
+    assert "ZERO_VENTA" in codes
+    warn = next(w for w in warnings if w["code"] == "ZERO_VENTA")
+    assert warn["level"] == "red"
+
+
+def test_warnings_zero_flete():
+    """costeo_json flete_internacional_usd = 0 fires ZERO_FLETE yellow warning."""
+    q = _quote({})
+    q["costeo_json"] = {
+        "flete_internacional_usd": 0, "visto_bueno_usd": 50,
+        "customs_agent_usd": 100, "transport_usd": 80,
+        "transport_soles": 300, "total_usd": 230, "customs_agent": "OEA",
+    }
+    warnings = check_quote_warnings(q)
+    codes = [w["code"] for w in warnings]
+    assert "ZERO_FLETE" in codes
+    warn = next(w for w in warnings if w["code"] == "ZERO_FLETE")
+    assert warn["level"] == "yellow"
+
+
+def test_has_red_warnings_true():
+    """has_red_warnings returns True when any warning has level red."""
+    ws = [{"level": "yellow", "code": "A", "message": "x"},
+          {"level": "red",    "code": "B", "message": "y"}]
+    assert has_red_warnings(ws) is True
+
+
+def test_has_red_warnings_false_all_yellow():
+    """has_red_warnings returns False when all warnings are yellow."""
+    ws = [{"level": "yellow", "code": "A", "message": "x"},
+          {"level": "yellow", "code": "C", "message": "z"}]
+    assert has_red_warnings(ws) is False
+
+
+# ── email_sender coverage ─────────────────────────────────────────────────────
+
+def test_send_quote_email_stub_returns_true():
+    """send_quote_email in stub mode returns (True, message)."""
+    from core.email_sender import send_quote_email
+    from core.db import init_db
+    init_db()
+    ok, msg = send_quote_email(
+        ref_code="26-05-QE-TEST",
+        quote_id=999,
+        customer_email="cliente@example.com",
+        customer_name="Test SA",
+        actor="abel",
+    )
+    assert ok is True
+    assert "26-05-QE-TEST" in msg
+
+
+def test_send_quote_email_logs_audit():
+    """send_quote_email logs QUOTE_SENT to audit trail."""
+    from core.email_sender import send_quote_email
+    from core.db import init_db, get_audit_trail
+    init_db()
+    send_quote_email(
+        ref_code="26-05-QE-AUDIT",
+        quote_id=998,
+        customer_email="x@example.com",
+        customer_name="Audit SA",
+        actor="jp",
+    )
+    trail = get_audit_trail("26-05-QE-AUDIT")
+    assert any(e["event_type"] == "QUOTE_SENT" for e in trail)
+
+
+def test_send_acknowledgment_email_stub_returns_true():
+    """send_acknowledgment_email in stub mode returns (True, message)."""
+    from core.email_sender import send_acknowledgment_email
+    from core.db import init_db
+    init_db()
+    ok, msg = send_acknowledgment_email(
+        recipient_email="ack@example.com",
+        recipient_name="Test User",
+        subject="Acuse de Recibo",
+        ack_text="Hemos recibido su solicitud.",
+        actor="system",
+    )
+    assert ok is True
+    assert "ack@example.com" in msg
+
+
+def test_credentials_rotated_is_bool():
+    """CREDENTIALS_ROTATED must be a bool — routes import it for template context."""
+    from core.email_sender import CREDENTIALS_ROTATED
+    assert isinstance(CREDENTIALS_ROTATED, bool)

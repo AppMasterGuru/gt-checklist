@@ -373,3 +373,128 @@ class TestDriveReader:
 
     def test_drive_available_constant_type(self):
         assert isinstance(DRIVE_AVAILABLE, bool)
+
+
+# ── GT-P-016: Risk score classification ─────────────────────────────────────
+
+from procedures.rules import (  # noqa: E402
+    RISK_CRITICAL_THRESHOLD,
+    validate_risk_score,
+    validate_risk_matrix_currency,
+    ALLOWED_RISK_CURRENCIES,
+)
+
+
+class TestValidateRiskScore:
+    """GT-P-016: P×I ≥ 9 = Crítico (Prioridad 1); P×I < 9 = Tolerable (Prioridad 2)."""
+
+    def test_score_9_boundary_is_critico(self):
+        classification, _ = validate_risk_score(3, 3)
+        assert classification == "Crítico"
+
+    def test_score_9_boundary_is_prioridad_1(self):
+        _, priority = validate_risk_score(3, 3)
+        assert priority == "Prioridad 1"
+
+    def test_score_8_below_boundary_is_tolerable(self):
+        classification, _ = validate_risk_score(4, 2)
+        assert classification == "Tolerable"
+
+    def test_score_8_below_boundary_is_prioridad_2(self):
+        _, priority = validate_risk_score(4, 2)
+        assert priority == "Prioridad 2"
+
+    def test_score_12_above_boundary_is_critico(self):
+        classification, _ = validate_risk_score(3, 4)
+        assert classification == "Crítico"
+
+    def test_max_score_81_is_critico(self):
+        classification, _ = validate_risk_score(9, 9)
+        assert classification == "Crítico"
+
+    def test_min_score_1_is_tolerable(self):
+        classification, _ = validate_risk_score(1, 1)
+        assert classification == "Tolerable"
+
+    def test_p1_i9_score_9_is_critico(self):
+        classification, _ = validate_risk_score(1, 9)
+        assert classification == "Crítico"
+
+    def test_p9_i1_score_9_is_critico(self):
+        classification, _ = validate_risk_score(9, 1)
+        assert classification == "Crítico"
+
+    def test_score_6_is_tolerable(self):
+        classification, _ = validate_risk_score(2, 3)
+        assert classification == "Tolerable"
+
+    def test_score_4_is_tolerable(self):
+        classification, _ = validate_risk_score(2, 2)
+        assert classification == "Tolerable"
+
+    def test_score_10_is_critico(self):
+        classification, _ = validate_risk_score(5, 2)
+        assert classification == "Crítico"
+
+    def test_returns_tuple_of_two(self):
+        result = validate_risk_score(3, 3)
+        assert isinstance(result, tuple) and len(result) == 2
+
+    def test_classification_is_string(self):
+        classification, _ = validate_risk_score(2, 4)
+        assert isinstance(classification, str)
+
+    def test_priority_is_string(self):
+        _, priority = validate_risk_score(1, 1)
+        assert isinstance(priority, str)
+
+    def test_zero_probability_gives_tolerable(self):
+        classification, _ = validate_risk_score(0, 9)
+        assert classification == "Tolerable"
+
+
+# ── GT-P-017: Risk matrix currency ──────────────────────────────────────────
+
+
+class TestValidateRiskMatrixCurrency:
+    """GT-P-017: Risk matrix costs must be in USD, PEN, or SOL."""
+
+    def test_usd_is_valid(self):
+        ok, _ = validate_risk_matrix_currency("USD")
+        assert ok is True
+
+    def test_pen_is_valid(self):
+        ok, _ = validate_risk_matrix_currency("PEN")
+        assert ok is True
+
+    def test_sol_is_valid(self):
+        ok, _ = validate_risk_matrix_currency("SOL")
+        assert ok is True
+
+    def test_eur_is_invalid(self):
+        ok, _ = validate_risk_matrix_currency("EUR")
+        assert ok is False
+
+    def test_gbp_is_invalid(self):
+        ok, _ = validate_risk_matrix_currency("GBP")
+        assert ok is False
+
+    def test_empty_string_is_invalid(self):
+        ok, _ = validate_risk_matrix_currency("")
+        assert ok is False
+
+    def test_lowercase_usd_is_valid(self):
+        ok, _ = validate_risk_matrix_currency("usd")
+        assert ok is True
+
+    def test_returns_tuple(self):
+        result = validate_risk_matrix_currency("USD")
+        assert isinstance(result, tuple) and len(result) == 2
+
+    def test_valid_returns_true_bool(self):
+        ok, _ = validate_risk_matrix_currency("PEN")
+        assert ok is True and isinstance(ok, bool)
+
+    def test_invalid_returns_false_bool(self):
+        ok, _ = validate_risk_matrix_currency("CHF")
+        assert ok is False and isinstance(ok, bool)

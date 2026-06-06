@@ -260,6 +260,66 @@
       cursor: not-allowed;
     }
 
+    /* ── Margin override widget ─────────────────────────────────────────── */
+    .margin-override {
+      background: #f8f9fa;
+      border: 1px solid #dee2e6;
+      border-radius: 6px;
+      padding: 14px 16px;
+      margin-bottom: 14px;
+    }
+    .margin-override label {
+      font-size: 13px;
+      font-weight: 600;
+      color: #1B3A6B;
+      display: block;
+      margin-bottom: 8px;
+    }
+    .margin-input-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .margin-input-row input[type="number"] {
+      width: 90px;
+      font-size: 15px;
+      font-weight: 700;
+      padding: 6px 10px;
+      border: 2px solid #1B3A6B;
+      border-radius: 4px;
+    }
+    .margin-input-row .pct-suffix {
+      font-size: 15px;
+      font-weight: 700;
+      color: #1B3A6B;
+    }
+    .margin-live-display {
+      margin-top: 10px;
+      font-size: 13px;
+      color: #333;
+      display: flex;
+      gap: 20px;
+      flex-wrap: wrap;
+    }
+    .margin-live-display .live-item {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .margin-live-display .live-label {
+      font-size: 11px;
+      color: #888;
+      text-transform: uppercase;
+    }
+    .margin-live-display .live-value {
+      font-size: 14px;
+      font-weight: 700;
+      color: #1B3A6B;
+    }
+    .margin-live-display .live-value.profit-positive { color: #1a7f3c; }
+    .margin-live-display .live-value.profit-negative { color: #c00; }
+
     /* ── Action buttons ─────────────────────────────────────────────────── */
     .action-buttons {
       display: flex;
@@ -379,11 +439,41 @@
       ⛔ Hay errores críticos que deben resolverse antes de aprobar. Corrija las alertas rojas arriba.
     </div>
     {% endif %}
+    <!-- Margin override widget -->
+    {% if quote.costeo_json %}
+    <div class="margin-override"
+         data-costeo="{{ quote.costeo_json.total_usd }}"
+         data-margin="{{ (quote.venta_json.margin_pct * 100) if quote.venta_json else 0 }}">
+      <label for="margin-input">Ajustar margen antes de aprobar</label>
+      <div class="margin-input-row">
+        <input type="number" id="margin-input" name="margin-display"
+               value="{{ '%.1f'|format((quote.venta_json.margin_pct * 100) if quote.venta_json else 0) }}"
+               min="0" max="100" step="0.1">
+        <span class="pct-suffix">%</span>
+      </div>
+      <div class="margin-live-display">
+        <div class="live-item">
+          <span class="live-label">Costeo</span>
+          <span class="live-value" id="live-costeo">USD {{ "%.2f"|format(quote.costeo_json.total_usd) }}</span>
+        </div>
+        <div class="live-item">
+          <span class="live-label">Venta (con margen)</span>
+          <span class="live-value" id="live-sell">—</span>
+        </div>
+        <div class="live-item">
+          <span class="live-label">Ganancia</span>
+          <span class="live-value" id="live-profit">—</span>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
     <div class="gate-actions">
       <form method="POST" action="{{ url_for('cotizador.approve_quote', ref_code=quote.reference_code) }}"
-            class="inline-form">
+            class="inline-form" id="approve-form">
         <input type="text" name="actor" placeholder="Tu nombre" required class="input-sm">
         <input type="text" name="notes" placeholder="Notas (opcional)" class="input-sm">
+        <input type="hidden" name="override_margin_pct" id="hidden-margin">
         <button type="submit" class="btn btn-approve" {% if has_red %}disabled title="Resolver alertas rojas primero"{% endif %}>✓ Aprobar</button>
       </form>
       <form method="POST" action="{{ url_for('cotizador.reject_quote', ref_code=quote.reference_code) }}"
@@ -609,6 +699,36 @@
 
   // Restore preference on load
   applyVista(localStorage.getItem(STORAGE_KEY) || 'moderna');
+</script>
+
+<script>
+  (function () {
+    var widget = document.querySelector('.margin-override');
+    if (!widget) return;
+
+    var input       = document.getElementById('margin-input');
+    var hiddenInput = document.getElementById('hidden-margin');
+    var liveSell    = document.getElementById('live-sell');
+    var liveProfit  = document.getElementById('live-profit');
+
+    var costeo = parseFloat(widget.dataset.costeo) || 0;
+
+    function update() {
+      var pct    = parseFloat(input.value);
+      if (isNaN(pct) || pct >= 100) { liveSell.textContent = '—'; liveProfit.textContent = '—'; return; }
+      var sell   = costeo / (1 - pct / 100);
+      var profit = sell - costeo;
+
+      liveSell.textContent   = 'USD ' + sell.toFixed(2);
+      liveProfit.textContent = 'USD ' + profit.toFixed(2);
+      liveProfit.className   = 'live-value ' + (profit >= 0 ? 'profit-positive' : 'profit-negative');
+
+      if (hiddenInput) hiddenInput.value = pct.toFixed(2);
+    }
+
+    input.addEventListener('input', update);
+    update();
+  })();
 </script>
 </body>
 </html>
