@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GT Cotizador — Dashboard</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <style>
+    /* ── Vista Clásica: dashboard overrides ── */
+    body.vista-clasica {
+      background: #fff;
+      font-family: Calibri, Arial, sans-serif;
+      font-size: 13px;
+    }
+    body.vista-clasica header {
+      background: #fff;
+      border-bottom: 3px solid #E8471C;
+      box-shadow: none;
+    }
+    body.vista-clasica .brand-name { color: #1B3A6B; }
+    body.vista-clasica .brand-sub  { color: #E8471C; }
+    body.vista-clasica .nav-link   { color: #1B3A6B; text-decoration: underline; }
+    body.vista-clasica .nav-link.active { color: #E8471C; }
+    body.vista-clasica footer { background: #1B3A6B; border-top: 3px solid #E8471C; }
+
+    /* Dashboard table: Excel style */
+    body.vista-clasica .quotes-table { border-collapse: collapse; font-size: 12px; }
+    body.vista-clasica .quotes-table thead tr { background: #4472C4; }
+    body.vista-clasica .quotes-table thead th {
+      border: 1px solid #2E5896; color: #fff;
+      font-size: 11px; padding: 6px 10px; text-transform: none;
+    }
+    body.vista-clasica .quotes-table tbody tr:nth-child(even) { background: #F2F2F2; }
+    body.vista-clasica .quotes-table tbody tr:nth-child(odd)  { background: #fff; }
+    body.vista-clasica .quotes-table tbody td {
+      border: 1px solid #D9D9D9; padding: 5px 10px; color: #000;
+    }
+    body.vista-clasica .badge {
+      background: #E8471C; color: #fff; border-radius: 0; font-size: 11px;
+    }
+    body.vista-clasica .incoterm {
+      background: #4472C4; color: #fff; border-radius: 0; font-size: 11px; padding: 2px 6px;
+    }
+    body.vista-clasica .status-pill { border-radius: 0; font-weight: 700; }
+    body.vista-clasica .btn, body.vista-clasica .btn-primary, body.vista-clasica .btn-sm {
+      background: #E8471C; color: #fff; border: 1px solid #C55A11;
+      border-radius: 0; font-size: 11px; box-shadow: none;
+    }
+    body.vista-clasica .page-header h1 { color: #1B3A6B; }
+    body.vista-clasica .ref-code { color: #1B3A6B; font-weight: 700; }
+
+    /* ── Toast notifications ── */
+    #gt-toast-container {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      z-index: 9999;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      pointer-events: none;
+    }
+    .gt-toast {
+      background: #fff;
+      border-left: 4px solid #E8471C;
+      border-radius: 8px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+      padding: 16px 20px;
+      min-width: 280px;
+      max-width: 360px;
+      pointer-events: all;
+      transform: translateX(120%);
+      opacity: 0;
+      transition: transform 0.3s ease, opacity 0.3s ease;
+    }
+    .gt-toast.gt-toast--visible {
+      transform: translateX(0);
+      opacity: 1;
+    }
+    .gt-toast.gt-toast--hiding {
+      transform: translateX(120%);
+      opacity: 0;
+    }
+    .gt-toast-label {
+      font-size: 11px;
+      color: #888;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 4px;
+    }
+    .gt-toast-name {
+      color: #1B3A6B;
+      font-weight: 700;
+      font-size: 14px;
+      margin-bottom: 12px;
+    }
+    .gt-toast-btn {
+      display: inline-block;
+      background: #E8471C;
+      color: #fff;
+      text-decoration: none;
+      padding: 6px 14px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .gt-toast-btn:hover { background: #c73c18; color: #fff; }
+
+    /* Toggle */
+    .vista-toggle-btn {
+      display: flex; flex-direction: column; align-items: flex-end; gap: 2px;
+      cursor: pointer; user-select: none;
+    }
+    .vista-toggle-btn button {
+      padding: 5px 12px; font-size: 12px; font-weight: 600;
+      border-radius: 4px; border: 1px solid #ccc;
+      background: #f8f9fa; color: #333; cursor: pointer; white-space: nowrap;
+    }
+    .vista-toggle-btn button:hover { background: #e9ecef; }
+    .vista-label { font-size: 10px; color: #888; text-align: right; }
+    body.vista-clasica .vista-toggle-btn button {
+      background: #E8471C; color: #fff; border-color: #C55A11; border-radius: 0;
+    }
+    body.vista-clasica .vista-label { color: #E8471C; font-weight: 600; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <span class="brand-name">Global Transport SAC</span>
+    <span class="brand-sub">Cotizador · Pipeline #1</span>
+  </div>
+  <nav>
+    <a href="{{ url_for('cotizador.dashboard') }}" class="nav-link active">Dashboard</a>
+    <a href="{{ url_for('cotizador.audit_log_page') }}" class="nav-link">Auditoría</a>
+    <a href="{{ url_for('cotizador.wca_pilot') }}" class="nav-link">Campaña WCA</a>
+    <a href="{{ url_for('cotizador.acknowledgment_demo') }}" class="nav-link">Acuses</a>
+    <a href="{{ url_for('cotizador.new_quote_form') }}" class="btn btn-primary">+ Nueva Cotización</a>
+  </nav>
+  <div class="vista-toggle-btn" onclick="toggleVista()">
+    <button id="vistaBtn" type="button">📊 Vista Clásica (Excel actual) →</button>
+    <span class="vista-label" id="vistaLabel">Vista Moderna activa</span>
+  </div>
+</header>
+
+<main>
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for cat, msg in messages %}
+      <div class="alert alert-{{ cat }}">{{ msg }}</div>
+    {% endfor %}
+  {% endwith %}
+
+  <div class="page-header">
+    <h1>Cotizaciones</h1>
+    <div class="stats">
+      <span class="stat">
+        <strong>{{ quotes | selectattr('status', 'equalto', 'PENDING')  | list | length }}</strong> pendientes
+      </span>
+      <span class="stat">
+        <strong>{{ quotes | selectattr('status', 'equalto', 'APPROVED') | list | length }}</strong> aprobadas
+      </span>
+      <span class="stat">
+        <strong>{{ quotes | selectattr('status', 'equalto', 'SENT')     | list | length }}</strong> enviadas
+      </span>
+    </div>
+  </div>
+
+  <table class="quotes-table">
+    <thead>
+      <tr>
+        <th>Referencia</th>
+        <th>Cliente</th>
+        <th>Modo</th>
+        <th>Incoterm</th>
+        <th>Estado</th>
+        <th class="num">Venta (USD)</th>
+        <th>Fecha</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for q in quotes %}
+      <tr>
+        <td><code class="ref-code">{{ q.reference_code }}</code></td>
+        <td>{{ q.client_name }}</td>
+        <td><span class="badge badge-{{ q.mode }}">{{ q.mode | upper }}</span></td>
+        <td><span class="incoterm">{{ q.incoterm }}</span></td>
+        <td>
+          <span class="status-pill status-{{ q.status | lower }}">{{ q.status }}</span>
+        </td>
+        <td class="num">
+          {% if q.venta_json and q.venta_json.total_usd is defined %}
+            ${{ "%.2f" | format(q.venta_json.total_usd) }}
+          {% else %}—{% endif %}
+        </td>
+        <td>{{ q.created_at[:10] }}</td>
+        <td>
+          <a href="{{ url_for('cotizador.quote_detail', ref_code=q.reference_code) }}"
+             class="btn btn-sm">Ver →</a>
+        </td>
+      </tr>
+      {% else %}
+      <tr>
+        <td colspan="8" class="empty-state">
+          No hay cotizaciones aún.
+          <a href="{{ url_for('cotizador.new_quote_form') }}">Crear primera cotización →</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</main>
+
+<footer>
+  <p>Global Transport SAC &middot; BASC &amp; ISO 9001 Certified &middot; GT Cotizador v1.0</p>
+</footer>
+
+<div id="gt-toast-container"></div>
+
+<script>
+  const STORAGE_KEY = 'gt_vista_preference';
+  const btn   = document.getElementById('vistaBtn');
+  const label = document.getElementById('vistaLabel');
+  function applyVista(mode) {
+    if (mode === 'clasica') {
+      document.body.classList.add('vista-clasica');
+      btn.textContent   = '✨ Vista Moderna →';
+      label.textContent = 'Vista Clásica activa — estilo Excel GT';
+    } else {
+      document.body.classList.remove('vista-clasica');
+      btn.textContent   = '📊 Vista Clásica (Excel actual) →';
+      label.textContent = 'Vista Moderna activa';
+    }
+  }
+  function toggleVista() {
+    const current = localStorage.getItem(STORAGE_KEY) || 'moderna';
+    const next    = current === 'moderna' ? 'clasica' : 'moderna';
+    localStorage.setItem(STORAGE_KEY, next);
+    applyVista(next);
+  }
+  applyVista(localStorage.getItem(STORAGE_KEY) || 'moderna');
+</script>
+
+<script>
+  (function () {
+    var POLL_MS   = 15000;
+    var DISMISS_MS = 10000;
+    var seenIds   = null; // null = not yet initialised
+    var container = document.getElementById('gt-toast-container');
+
+    function showToast(quote) {
+      var toast = document.createElement('div');
+      toast.className = 'gt-toast';
+
+      var label = document.createElement('div');
+      label.className = 'gt-toast-label';
+      label.textContent = '📋 Nueva cotización recibida';
+
+      var name = document.createElement('div');
+      name.className = 'gt-toast-name';
+      name.textContent = quote.client_name || quote.reference_code;
+
+      var link = document.createElement('a');
+      link.className = 'gt-toast-btn';
+      link.href = '/quote/' + encodeURIComponent(quote.reference_code);
+      link.textContent = 'Ver cotización →';
+
+      toast.appendChild(label);
+      toast.appendChild(name);
+      toast.appendChild(link);
+      container.appendChild(toast);
+
+      // Slide in
+      requestAnimationFrame(function () {
+        requestAnimationFrame(function () {
+          toast.classList.add('gt-toast--visible');
+        });
+      });
+
+      // Auto-dismiss after DISMISS_MS
+      setTimeout(function () { dismissToast(toast); }, DISMISS_MS);
+    }
+
+    function dismissToast(toast) {
+      toast.classList.remove('gt-toast--visible');
+      toast.classList.add('gt-toast--hiding');
+      setTimeout(function () {
+        if (toast.parentNode) toast.parentNode.removeChild(toast);
+      }, 350);
+    }
+
+    function poll() {
+      fetch('/api/dashboard/quotes')
+        .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
+        .then(function (quotes) {
+          if (seenIds === null) {
+            // First load — establish baseline, show no toasts
+            seenIds = new Set(quotes.map(function (q) { return q.id; }));
+            return;
+          }
+          quotes.forEach(function (q) {
+            if (!seenIds.has(q.id)) {
+              seenIds.add(q.id);
+              if (q.status === 'PENDING') {
+                showToast(q);
+              }
+            }
+          });
+        })
+        .catch(function () {}); // silent — don't break on network error
+    }
+
+    poll();
+    setInterval(poll, POLL_MS);
+  })();
+</script>
+</body>
+</html>
