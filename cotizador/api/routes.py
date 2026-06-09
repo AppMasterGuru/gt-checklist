@@ -11,6 +11,8 @@ Endpoints:
   POST /quote/<ref>/send                  → mark sent (APPROVED → SENT) + fires email stub
   GET  /quote/<ref>/provider-emails       → provider email drafts page
   GET  /quote/<ref>/sintad-export         → SINTAD pre-fill Excel download
+  GET  /quote/<ref>/preview.pdf           → inline proforma preview (venta only)
+  POST /quote/<ref>/new-version           → copy SENT/REJECTED quote into new PENDING quote
   GET  /audit                             → full audit log with filters
   GET  /audit/export.csv                  → CSV export of audit log
   GET  /api/dashboard/quotes              → JSON quote list for toast polling
@@ -48,7 +50,7 @@ from core.whatsapp_listener import process_whatsapp_message
 from core.monitor import check_audit_anomalies, generate_daily_digest, run_health_checks
 from core.db import audit, get_audit_trail, get_connection, get_provider_replies, get_quote_by_ref, transition_status
 from core.email_sender import send_quote_email, send_provider_email, CREDENTIALS_ROTATED
-from core.pdf_generator import generate_pdf_bytes, WEASYPRINT_AVAILABLE
+from core.pdf_generator import generate_pdf_bytes, generate_html_preview, WEASYPRINT_AVAILABLE
 from core.exchange_rate import get_exchange_rate, soles_to_usd
 from core.incoterms import classify_incoterm
 from core.provider_emails import generate_provider_emails
@@ -711,6 +713,111 @@ def sintad_export(ref_code: str):
         mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": f"attachment; filename=SINTAD_{safe_ref}.xlsx"},
     )
+
+
+
+# ── PDF preview (inline on approval gate) ─────────────────────────────────────
+
+@bp.route("/quote/<path:ref_code>/preview.pdf")
+def preview_pdf(ref_code: str):
+    """Client-facing proforma preview — PDF if WeasyPrint available, else HTML."""
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT costeo_json, venta_json, client_name, origin, destination, "
+            "staff_code, language FROM quotes WHERE reference_code = ?",
+            (ref_code,),
+        ).fetchone()
+    if row is None:
+        return Response("Not found", status=404)
+
+    venta  = json.loads(row["venta_json"]  or "{}")
+    costeo = json.loads(row["costeo_json"] or "{}")
+
+    override_raw = request.args.get("override_margin_pct", "").strip()
+    if override_raw:
+        try:
+            new_margin   = float(override_raw) / 100
+            costeo_total = float(costeo.get("total_usd", 0))
+            venta = dict(venta)
+            venta["total_usd"]  = round(costeo_total * (1 + new_margin), 2)
+            venta["margin_pct"] = new_margin
+        except (ValueError, TypeError):
+            pass
+
+    meta = {
+        "reference":    ref_code,
+        "client_name":  row["client_name"] or "",
+        "origin":       row["origin"]      or "",
+        "destination":  row["destination"] or "",
+        "staff_code":   row["staff_code"]  or "",
+        "language":     row["language"]    or "es",
+        "mode":         costeo.get("mode", "lcl"),
+        "consolidator": costeo.get("consolidator", ""),
+        "airline":      costeo.get("airline", ""),
+        "exchange_rate": costeo.get("exchange_rate", 0),
+    }
+
+    if WEASYPRINT_AVAILABLE:
+        try:
+            pdf_bytes = generate_pdf_bytes(venta, meta)
+            return Response(
+                pdf_bytes, mimetype="application/pdf",
+                headers={"Content-Disposition": "inline"},
+            )
+        except Exception:
+            pass
+
+    html = generate_html_preview(venta, meta)
+    return Response(html, mimetype="text/html")
+
+
+# ── New version (copy SENT/REJECTED → new PENDING) ────────────────────────────
+
+@bp.route("/quote/<path:ref_code>/new-version", methods=["POST"])
+def new_version(ref_code: str):
+    """Clone a SENT or REJECTED quote into a new PENDING quote."""
+    actor = request.form.get("actor", "").strip()
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT client_name, client_email, incoterm, mode, origin, destination, "
+            "cargo_description, weight_kg, volume_cbm, dimensions_json, "
+            "costeo_json, venta_json, margin_pct, exchange_rate, staff_code, language "
+            "FROM quotes WHERE reference_code = ? AND status IN ('SENT','REJECTED')",
+            (ref_code,),
+        ).fetchone()
+    if row is None:
+        flash("Solo se pueden versionar cotizaciones enviadas o rechazadas.", "error")
+        return redirect(url_for("cotizador.dashboard"))
+
+    with get_connection() as conn:
+        new_ref = generate_reference(conn, row["client_name"], row["incoterm"], row["staff_code"])
+        conn.execute(
+            """
+            INSERT INTO quotes
+              (reference_code, client_name, client_email, incoterm, mode, origin, destination,
+               cargo_description, weight_kg, volume_cbm, dimensions_json,
+               costeo_json, venta_json, margin_pct, exchange_rate,
+               status, staff_code, language)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'PENDING',?,?)
+            """,
+            (
+                new_ref,
+                row["client_name"], row["client_email"], row["incoterm"],
+                row["mode"], row["origin"], row["destination"],
+                row["cargo_description"], row["weight_kg"], row["volume_cbm"],
+                row["dimensions_json"], row["costeo_json"], row["venta_json"],
+                row["margin_pct"], row["exchange_rate"],
+                row["staff_code"], row["language"],
+            ),
+        )
+        conn.commit()
+
+    audit("QUOTE_VERSION_CREATED", new_ref, actor or "system", {
+        "original_ref": ref_code,
+        "new_ref": new_ref,
+    })
+    flash(f"Nueva versión {new_ref} creada a partir de {ref_code}.", "success")
+    return redirect(url_for("cotizador.quote_detail", ref_code=new_ref))
 
 
 # ── Audit log page ────────────────────────────────────────────────────────────

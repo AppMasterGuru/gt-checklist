@@ -515,6 +515,17 @@
     </div>
     {% endif %}
 
+    <!-- Inline proforma preview -->
+    <div class="pdf-preview-wrapper">
+      <p class="preview-label">Vista previa — lo que recibirá el cliente</p>
+      <iframe id="pdf-preview"
+              data-base="{{ url_for('cotizador.preview_pdf', ref_code=quote.reference_code) }}"
+              src="{{ url_for('cotizador.preview_pdf', ref_code=quote.reference_code) }}"
+              width="100%" height="620"
+              style="border:1px solid #ddd; border-radius:4px; display:block; margin-top:8px; background:#f9f9f9;">
+      </iframe>
+    </div>
+
     <div class="gate-actions">
       <form method="POST" action="{{ url_for('cotizador.approve_quote', ref_code=quote.reference_code) }}"
             class="inline-form" id="approve-form">
@@ -558,6 +569,13 @@
   <section class="approval-gate gate-sent">
     <h2>✓ Enviada</h2>
     <p>Marcada como enviada el {{ quote.sent_at[:10] if quote.sent_at else '—' }}.</p>
+    <div class="gate-actions">
+      <form method="POST" action="{{ url_for('cotizador.new_version', ref_code=quote.reference_code) }}"
+            class="inline-form">
+        <input type="text" name="actor" placeholder="Tu nombre" required class="input-sm">
+        <button type="submit" class="btn btn-secondary">↩ Crear nueva versión</button>
+      </form>
+    </div>
   </section>
   {% endif %}
 
@@ -565,6 +583,13 @@
   <section class="approval-gate gate-rejected">
     <h2>✗ Rechazada</h2>
     {% if quote.notes %}<p>Motivo: {{ quote.notes }}</p>{% endif %}
+    <div class="gate-actions">
+      <form method="POST" action="{{ url_for('cotizador.new_version', ref_code=quote.reference_code) }}"
+            class="inline-form">
+        <input type="text" name="actor" placeholder="Tu nombre" required class="input-sm">
+        <button type="submit" class="btn btn-secondary">↩ Crear nueva versión</button>
+      </form>
+    </div>
   </section>
   {% endif %}
 
@@ -771,6 +796,11 @@
       liveProfit.className   = 'live-value ' + (profit >= 0 ? 'profit-positive' : 'profit-negative');
 
       if (hiddenInput) hiddenInput.value = pct.toFixed(2);
+
+      var previewFrame = document.getElementById('pdf-preview');
+      if (previewFrame && !isNaN(pct)) {
+        previewFrame.src = previewFrame.dataset.base + '?override_margin_pct=' + pct.toFixed(2);
+      }
     }
 
     input.addEventListener('input', update);
