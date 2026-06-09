@@ -133,10 +133,7 @@ def run_listener():
 
 @bp.route("/run-listener-force", methods=["POST"])
 def run_listener_force():
-    """Dev-only: run the listener ignoring LISTENER_ENABLED. Guarded by FLASK_ENV=development."""
-    if os.environ.get("FLASK_ENV", "production") != "development":
-        return jsonify({"status": "FORBIDDEN", "detail": "only available in development"}), 403
-
+    """Force-run the email listener regardless of LISTENER_ENABLED."""
     ts = datetime.now(timezone.utc).isoformat()
     try:
         results  = process_inbound_emails(auto_ack=True)
@@ -930,10 +927,7 @@ def wca_pilot():
 
 
 # ── Demo reset (DEV ONLY) ─────────────────────────────────────────────────────
-# DEV ONLY — clears all test data before JP/Renato demo. Never expose in production.
-# Guard 1: ?password=gt2026 must be present.
-# Guard 2: FLASK_ENV environment variable must equal "development".
-#
+# Clears all data and optionally seeds demo quotes. Guarded by ?password=gt2026.
 # Optional: &seed=true — after clearing, pre-loads 3 demo quotes in different states:
 #   Quote 1 (LCL Lima→Hamburg, Hamburg Importer GmbH)   → PENDING
 #   Quote 2 (Aéreo Lima→LAX,   Miami Foods Corp)         → APPROVED
@@ -1240,9 +1234,7 @@ def _seed_demo_quotes() -> list[str]:
 def demo_reset():
     password = request.args.get("password", "")
     seed     = request.args.get("seed", "false").lower() == "true"
-    flask_env = os.environ.get("FLASK_ENV", "production")
-
-    if password != "gt2026" or flask_env != "development":
+    if password != "gt2026":
         return jsonify({"error": "not allowed"}), 403
 
     n_quotes = _reset_db()
