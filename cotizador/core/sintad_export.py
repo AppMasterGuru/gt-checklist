@@ -26,6 +26,7 @@ from datetime import date
 
 import openpyxl
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+from openpyxl.worksheet.datavalidation import DataValidation
 
 # ── Brand colours ────────────────────────────────────────────────────────────
 _ORANGE = "E8471C"
@@ -171,9 +172,11 @@ def generate_sintad_excel(quote: dict) -> bytes:
     sub.font  = Font(italic=True, size=9, color=_NAVY)
     ws1.merge_cells("A2:B2")
 
+    requester_label = (quote.get("requester_type") or "cliente").capitalize()
     _write_kv(ws1, 4, [
         ("Referencia",            ref),
         ("Cliente",               quote.get("client_name") or ""),
+        ("Tipo Solicitante",      requester_label),   # row 6 — dropdown added below
         ("Tipo",                  direction),
         ("Puerto Origen",         quote.get("origin") or ""),
         ("Puerto Destino",        quote.get("destination") or ""),
@@ -193,6 +196,11 @@ def generate_sintad_excel(quote: dict) -> bytes:
         ("Fecha Cotización",      today),
     ])
 
+    # Dropdown on Tipo Solicitante value cell (B6 = row 4 start + index 2)
+    dv = DataValidation(type="list", formula1='"Agente,Cliente"', allow_blank=False, showErrorMessage=False)
+    ws1.add_data_validation(dv)
+    dv.add("B6")
+
     # ── Sheet 2: Costos ──────────────────────────────────────────────────────
     ws2 = wb.create_sheet("Costos")
     ws2.column_dimensions["A"].width = 35
@@ -211,20 +219,20 @@ def generate_sintad_excel(quote: dict) -> bytes:
     note.font = Font(bold=True, color=_ORANGE)
     ws2.merge_cells("A2:D2")
 
-    flete_val    = costeo.get("flete_internacional_usd") or 0
+    flete_val    = round(costeo.get("flete_internacional_usd") or 0, 2)
     flete_rate   = costeo.get("flete_rate_lcl") or 0
     flete_factor = costeo.get("flete_factor")      # None for non-LCL
-    thc_usd_val  = costeo.get("thc_usd") or 0
+    thc_usd_val  = round(costeo.get("thc_usd") or 0, 2)
     thc_rate_val = costeo.get("thc_rate") or 0
 
-    # TN/M3 cell: numeric factor value (blank for non-LCL and non-W/M rows)
-    tn_m3_str = f"{flete_factor:.4g}" if flete_factor else ""
+    # TN/M3 column: store as float so _write_table right-aligns it automatically
+    tn_m3_val = round(flete_factor, 4) if flete_factor else ""
 
     costeo_rows = [
         [
             "Flete Internacional (USD)",
-            flete_rate if flete_rate else flete_val,  # rate per W/M if available, else flat
-            tn_m3_str,
+            flete_rate if flete_rate else flete_val,
+            tn_m3_val,
             flete_val,
         ],
     ]
@@ -232,16 +240,25 @@ def generate_sintad_excel(quote: dict) -> bytes:
         costeo_rows.append([
             "THC / Terminal Handling (USD)",
             thc_rate_val if thc_rate_val else thc_usd_val,
-            tn_m3_str,
+            tn_m3_val,
             thc_usd_val,
         ])
+    # Extra coloader items (user-defined via form)
+    for ei in (costeo.get("extra_items") or []):
+        ei_tn = round(ei["factor"], 4) if ei.get("factor") else ""
+        costeo_rows.append([
+            ei["concept"],
+            round(ei["valor"], 2),
+            ei_tn,
+            round(ei["total"], 2),
+        ])
     costeo_rows += [
-        ["Visto Bueno (USD)",      costeo.get("visto_bueno_usd") or 0,   "", costeo.get("visto_bueno_usd") or 0],
-        ["Agente de Aduana (USD)", costeo.get("customs_agent_usd") or 0, "", costeo.get("customs_agent_usd") or 0],
-        ["Transporte Local (USD)", costeo.get("transport_usd") or 0,     "", costeo.get("transport_usd") or 0],
-        ["Transporte Local (S/)",  costeo.get("transport_soles") or 0,   "", ""],
-        ["TOTAL COSTEO (USD)",     costeo.get("total_usd") or 0,         "", costeo.get("total_usd") or 0],
-        ["Tipo de Cambio SBS",     exc_rate,                             "", ""],
+        ["Visto Bueno (USD)",      round(costeo.get("visto_bueno_usd") or 0, 2),   "", round(costeo.get("visto_bueno_usd") or 0, 2)],
+        ["Agente de Aduana (USD)", round(costeo.get("customs_agent_usd") or 0, 2), "", round(costeo.get("customs_agent_usd") or 0, 2)],
+        ["Transporte Local (USD)", round(costeo.get("transport_usd") or 0, 2),     "", round(costeo.get("transport_usd") or 0, 2)],
+        ["Transporte Local (S/)",  round(costeo.get("transport_soles") or 0, 2),   "", ""],
+        ["TOTAL COSTEO (USD)",     round(costeo.get("total_usd") or 0, 2),         "", round(costeo.get("total_usd") or 0, 2)],
+        ["Tipo de Cambio SBS",     exc_rate,                                        "", ""],
     ]
     _write_table(ws2, 4, ["Concepto", "Costo", "TN/M3", "Total (USD)"], costeo_rows)
 

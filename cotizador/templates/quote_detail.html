@@ -698,6 +698,20 @@
         <strong>USD {{ "%.2f"|format(quote.costeo_json.thc_usd) }}</strong>
       </div>
       {% endif %}
+      {% if quote.costeo_json.extra_items %}
+        {% for ei in quote.costeo_json.extra_items %}
+        <div class="detail-row">
+          <span>{{ ei.concept }}</span>
+          <strong>
+            {% if ei.factor %}
+              USD {{ "%.2f"|format(ei.valor) }}/W·M &nbsp;·&nbsp; <em>TN/M3:</em> {{ "%.4g"|format(ei.factor) }} {{ ei.factor_unit or '' }} &nbsp;=&nbsp; USD {{ "%.2f"|format(ei.total) }}
+            {% else %}
+              USD {{ "%.2f"|format(ei.total) }}
+            {% endif %}
+          </strong>
+        </div>
+        {% endfor %}
+      {% endif %}
       <div class="detail-row">
         <span>Visto Bueno ({{ quote.costeo_json.consolidator or '—' }})</span>
         <strong>USD {{ "%.2f"|format(quote.costeo_json.visto_bueno_usd) }}</strong>

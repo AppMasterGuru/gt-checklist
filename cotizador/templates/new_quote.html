@@ -40,8 +40,8 @@
         <label class="field">
           <span class="label-text">Solicitante *</span>
           <select name="requester_type" required>
-            <option value="cliente">Cliente</option>
             <option value="agente">Agente</option>
+            <option value="cliente">Cliente</option>
           </select>
         </label>
         <label class="field">
@@ -196,9 +196,21 @@
       </div>
     </section>
 
-    <!-- SECTION 4: Assignment -->
+    <!-- SECTION 4: Conceptos adicionales del coloader -->
     <section class="form-section">
-      <h2>4. Asignación</h2>
+      <h2>4. Conceptos adicionales del coloader <span style="font-weight:normal;color:#6b7280;font-size:14px;">opcional</span></h2>
+      <p class="field-hint" style="margin-bottom:12px;">
+        Agrega las líneas que el coloader incluyó en su cotización (ej. Pick Up, Gastos FCA, Customs).
+        Ocean Freight y THC se agregan automáticamente desde la sección anterior.
+      </p>
+      <div id="extra-rows"></div>
+      <button type="button" class="btn btn-secondary" id="add-concepto-btn" style="margin-top:8px;">+ Agregar concepto</button>
+      <input type="hidden" name="extra_items_json" id="extra_items_json" value="[]">
+    </section>
+
+    <!-- SECTION 5: Assignment -->
+    <section class="form-section">
+      <h2>5. Asignación</h2>
       <div class="form-grid">
         <label class="field">
           <span class="label-text">Código de Staff</span>
@@ -223,5 +235,56 @@
   <p>Global Transport SAC &middot; BASC &amp; ISO 9001 Certified &middot; GT Cotizador v1.0</p>
 </footer>
 
+<script>
+(function () {
+  var nextId = 0;
+
+  function addConcepto() {
+    var id = nextId++;
+    var div = document.createElement('div');
+    div.id = 'extra-' + id;
+    div.className = 'extra-row form-grid';
+    div.style.cssText = 'margin-bottom:10px;padding:12px;border:1px solid #e5e7eb;border-radius:6px;background:#f9fafb;';
+    div.innerHTML =
+      '<label class="field"><span class="label-text">Concepto</span>' +
+      '<input type="text" class="xc" placeholder="Ej: Pick Up, Gastos FCA, Customs"></label>' +
+      '<label class="field"><span class="label-text">Valor (USD)</span>' +
+      '<input type="number" class="xv" step="0.01" min="0" placeholder="180.00"></label>' +
+      '<label class="field"><span class="label-text">Factor TN/M3 <em style="font-weight:normal;color:#6b7280;">opt.</em></span>' +
+      '<input type="number" class="xf" step="0.001" min="0" placeholder="—">' +
+      '<span class="field-hint">Vacío = monto fijo</span></label>' +
+      '<label class="field"><span class="label-text">Mínimo USD <em style="font-weight:normal;color:#6b7280;">opt.</em></span>' +
+      '<input type="number" class="xm" step="0.01" min="0" placeholder="—"></label>' +
+      '<div class="field" style="align-self:flex-end;">' +
+      '<button type="button" class="btn btn-secondary" onclick="removeConcepto(' + id + ')" style="margin-top:24px;">✕ Quitar</button></div>';
+    document.getElementById('extra-rows').appendChild(div);
+    div.querySelectorAll('input').forEach(function (inp) { inp.addEventListener('input', syncJson); });
+  }
+
+  function removeConcepto(id) {
+    var el = document.getElementById('extra-' + id);
+    if (el) { el.remove(); syncJson(); }
+  }
+
+  function syncJson() {
+    var items = [];
+    document.querySelectorAll('.extra-row').forEach(function (row) {
+      var concept = row.querySelector('.xc').value.trim();
+      var valor = parseFloat(row.querySelector('.xv').value) || 0;
+      var fv = row.querySelector('.xf').value;
+      var mv = row.querySelector('.xm').value;
+      var factor = fv ? (parseFloat(fv) || null) : null;
+      var min_usd = mv ? (parseFloat(mv) || null) : null;
+      if (concept && valor > 0) {
+        items.push({ concept: concept, valor: valor, factor: factor, min_usd: min_usd });
+      }
+    });
+    document.getElementById('extra_items_json').value = JSON.stringify(items);
+  }
+
+  document.getElementById('add-concepto-btn').addEventListener('click', addConcepto);
+  window.removeConcepto = removeConcepto;
+})();
+</script>
 </body>
 </html>

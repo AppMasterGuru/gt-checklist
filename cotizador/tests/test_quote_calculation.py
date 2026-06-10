@@ -408,6 +408,107 @@ class TestAbelDemoScenario:
         assert costeo["flete_internacional_usd"] == pytest.approx(400.0, rel=0.01)
 
 
+class TestDynamicLineItems:
+    """FIX 1 — coloader-driven line items replace hardcoded Handling/Transport."""
+
+    def test_extra_items_appear_in_venta(self, client):
+        q = _post_quote(client, {
+            "extra_items_json": '[{"concept":"Pick Up","valor":180,"factor":null,"min_usd":null}]',
+            "flete_lcl": "315",
+        })
+        venta = json.loads(q["venta_json"])
+        descriptions = [i["description"] for i in venta["line_items"]]
+        assert "Pick Up" in descriptions
+
+    def test_ocean_freight_always_first(self, client):
+        q = _post_quote(client, {
+            "extra_items_json": '[{"concept":"Customs","valor":110,"factor":null,"min_usd":null}]',
+            "flete_lcl": "315",
+        })
+        venta = json.loads(q["venta_json"])
+        assert venta["line_items"][0]["description"] == "International Freight"
+
+    def test_extra_items_replace_handling_transport(self, client):
+        q = _post_quote(client, {
+            "extra_items_json": '[{"concept":"Pick Up","valor":180,"factor":null,"min_usd":null}]',
+            "flete_lcl": "315",
+        })
+        venta = json.loads(q["venta_json"])
+        descriptions = [i["description"] for i in venta["line_items"]]
+        assert "Handling & Port Fees" not in descriptions
+        assert "Local Transport" not in descriptions
+
+    def test_multiple_extra_items(self, client):
+        extras = '[{"concept":"Gastos FCA","valor":47,"factor":null,"min_usd":null},'
+        extras += '{"concept":"Pick Up","valor":180,"factor":null,"min_usd":null},'
+        extras += '{"concept":"Customs","valor":110,"factor":null,"min_usd":null}]'
+        q = _post_quote(client, {"extra_items_json": extras, "flete_lcl": "163.80"})
+        venta = json.loads(q["venta_json"])
+        descriptions = [i["description"] for i in venta["line_items"]]
+        assert "Gastos FCA" in descriptions
+        assert "Pick Up" in descriptions
+        assert "Customs" in descriptions
+
+    def test_extra_item_total_scaled_by_margin(self, client):
+        # Pick Up 180, margin 20% → venta total = 216
+        q = _post_quote(client, {
+            "extra_items_json": '[{"concept":"Pick Up","valor":180,"factor":null,"min_usd":null}]',
+            "flete_lcl": "315", "margin_pct": "20",
+        })
+        venta = json.loads(q["venta_json"])
+        pu = next(i for i in venta["line_items"] if i["description"] == "Pick Up")
+        assert pu["total"] == pytest.approx(216.0, rel=0.01)
+
+    def test_no_extra_items_legacy_mode(self, client):
+        # Backward compat: no extra_items → original Handling & Transport lines present
+        q = _post_quote(client, {"flete_lcl": "315", "extra_items_json": "[]"})
+        venta = json.loads(q["venta_json"])
+        descriptions = [i["description"] for i in venta["line_items"]]
+        assert "Handling & Port Fees" in descriptions
+        assert "Local Transport" in descriptions
+
+    def test_extra_items_stored_in_costeo_json(self, client):
+        q = _post_quote(client, {
+            "extra_items_json": '[{"concept":"Customs","valor":110,"factor":null,"min_usd":null}]',
+            "flete_lcl": "315",
+        })
+        costeo = json.loads(q["costeo_json"])
+        assert costeo["extra_items"] is not None
+        assert costeo["extra_items"][0]["concept"] == "Customs"
+        assert costeo["extra_items"][0]["total"] == pytest.approx(110.0)
+
+    def test_extra_item_with_factor(self, client):
+        # Factor-based extra: valor=10/W·M, factor=9 → total=90
+        q = _post_quote(client, {
+            "volume_cbm": "9.0", "weight": "1500", "weight_unit": "kg",
+            "extra_items_json": '[{"concept":"Surcharge","valor":10,"factor":9,"min_usd":null}]',
+            "flete_lcl": "315",
+        })
+        costeo = json.loads(q["costeo_json"])
+        assert costeo["extra_items"][0]["total"] == pytest.approx(90.0)
+
+    def test_thc_appended_after_extra_items(self, client):
+        q = _post_quote(client, {
+            "extra_items_json": '[{"concept":"Pick Up","valor":180,"factor":null,"min_usd":null}]',
+            "flete_lcl": "315", "thc_rate": "12", "thc_min": "33",
+            "volume_cbm": "9.0", "weight": "1500", "weight_unit": "kg",
+        })
+        venta = json.loads(q["venta_json"])
+        descriptions = [i["description"] for i in venta["line_items"]]
+        assert "THC / Terminal Handling" in descriptions
+        assert descriptions.index("THC / Terminal Handling") > descriptions.index("Pick Up")
+
+
+class TestDefaultRequesterTypeAgente:
+    def test_form_default_is_agente(self, client):
+        resp = client.get("/quote/new")
+        assert resp.status_code == 200
+        html = resp.data.decode()
+        agente_pos = html.find('value="agente"')
+        cliente_pos = html.find('value="cliente"')
+        assert agente_pos < cliente_pos
+
+
 class TestAcusesRoute:
     def test_acuses_returns_200(self, client):
         resp = client.get("/acuses")

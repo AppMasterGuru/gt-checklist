@@ -328,7 +328,37 @@ def create_quote():
             handling_aereo_usd = fee["net_usd"]
             handling_aereo_info = fee
 
-    costeo_total = flete_usd + vb_usd + customs_usd + transport_usd + handling_aereo_usd + thc_usd
+    # User-defined coloader line items — submitted via "+ Agregar concepto" on the form
+    extra_costeo_items: list[dict] = []
+    _extra_raw = f.get("extra_items_json", "[]")
+    try:
+        _extra_input = json.loads(_extra_raw) if _extra_raw else []
+    except Exception:
+        _extra_input = []
+    for _ei in _extra_input:
+        _concept = str(_ei.get("concept", "")).strip()
+        _valor = float(_ei.get("valor") or 0)
+        _ei_min = float(_ei.get("min_usd") or 0) if _ei.get("min_usd") else None
+        if not _concept or _valor <= 0:
+            continue
+        _factor_f: float | None = None
+        if _ei.get("factor") is not None:
+            try:
+                _ff = round(float(_ei["factor"]), 4)
+                if _ff > 0:
+                    _factor_f = _ff
+            except (TypeError, ValueError):
+                pass
+        if _factor_f:
+            _ei_total = round(max(_valor * _factor_f, _ei_min or 0.0), 2)
+            extra_costeo_items.append({"concept": _concept, "valor": _valor, "factor": _factor_f,
+                                       "factor_unit": flete_factor_unit, "min_usd": _ei_min, "total": _ei_total})
+        else:
+            extra_costeo_items.append({"concept": _concept, "valor": _valor, "factor": None,
+                                       "factor_unit": None, "min_usd": None, "total": _valor})
+    _extra_total = sum(ei["total"] for ei in extra_costeo_items)
+
+    costeo_total = flete_usd + vb_usd + customs_usd + transport_usd + handling_aereo_usd + thc_usd + _extra_total
 
     costeo = {
         "flete_internacional_usd": flete_usd,
@@ -350,17 +380,19 @@ def create_quote():
         "consolidator": consolidator_name if mode == "lcl" else None,
         "airline": airline if mode == "aereo" else None,
         "customs_agent": agent["name"],
+        "extra_items": extra_costeo_items if extra_costeo_items else None,
     }
 
     m = 1 + margin_pct
     handling_fees_costeo = vb_usd + customs_usd + handling_aereo_usd
 
+    # Ocean Freight — always present, always first
     if mode == "lcl" and flete_rate_lcl:
         flete_item: dict = {
             "description": "International Freight",
             "unit_rate": round(flete_rate_lcl * m, 2),
             "factor_value": wm_factor,
-            "factor_unit": flete_factor_unit,  # "m³" or "ton"
+            "factor_unit": flete_factor_unit,
             "total": round(flete_usd * m, 2),
         }
     else:
@@ -371,38 +403,65 @@ def create_quote():
             "total": round(flete_usd * m, 2),
         }
 
-    venta_items = [
-        flete_item,
-        {
-            "description": "Handling & Port Fees",
-            "quantity": 1,
-            "unit_price": round(handling_fees_costeo * m, 2),
-            "total": round(handling_fees_costeo * m, 2),
-        },
-        {
-            "description": "Local Transport",
-            "quantity": 1,
-            "unit_price": round(transport_usd * m, 2),
-            "total": round(transport_usd * m, 2),
-        },
-    ]
-
+    # THC — built once, appended only when > 0
+    thc_venta_item: dict | None = None
     if thc_usd:
         if flete_rate_lcl:
-            venta_items.append({
+            thc_venta_item = {
                 "description": "THC / Terminal Handling",
                 "unit_rate": round(thc_rate * m, 2),
                 "factor_value": wm_factor,
                 "factor_unit": flete_factor_unit,
                 "total": round(thc_usd * m, 2),
-            })
+            }
         else:
-            venta_items.append({
+            thc_venta_item = {
                 "description": "THC / Terminal Handling",
                 "quantity": 1,
                 "unit_price": round(thc_usd * m, 2),
                 "total": round(thc_usd * m, 2),
-            })
+            }
+
+    if extra_costeo_items:
+        # Dynamic mode: coloader-driven items — proforma mirrors what consolidator quoted
+        venta_items = [flete_item]
+        for ei in extra_costeo_items:
+            if ei["factor"] is not None:
+                venta_items.append({
+                    "description": ei["concept"],
+                    "unit_rate": round(ei["valor"] * m, 2),
+                    "factor_value": ei["factor"],
+                    "factor_unit": ei["factor_unit"],
+                    "total": round(ei["total"] * m, 2),
+                })
+            else:
+                venta_items.append({
+                    "description": ei["concept"],
+                    "quantity": 1,
+                    "unit_price": round(ei["total"] * m, 2),
+                    "total": round(ei["total"] * m, 2),
+                })
+        if thc_venta_item:
+            venta_items.append(thc_venta_item)
+    else:
+        # Legacy mode: fixed handling + transport (backward-compat for quotes without extra items)
+        venta_items = [
+            flete_item,
+            {
+                "description": "Handling & Port Fees",
+                "quantity": 1,
+                "unit_price": round(handling_fees_costeo * m, 2),
+                "total": round(handling_fees_costeo * m, 2),
+            },
+            {
+                "description": "Local Transport",
+                "quantity": 1,
+                "unit_price": round(transport_usd * m, 2),
+                "total": round(transport_usd * m, 2),
+            },
+        ]
+        if thc_venta_item:
+            venta_items.append(thc_venta_item)
 
     venta_total = round(sum(item["total"] for item in venta_items), 2)
 
