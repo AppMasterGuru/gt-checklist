@@ -303,6 +303,111 @@ class TestSintadTnM3:
         assert b"TN/M3" not in resp.data
 
 
+class TestAbelDemoScenario:
+    """
+    Abel's worked example (demo 2026-06-10):
+      3 pallets · 150×200×100 cm · 500 kg each
+      → CBM = 9 m³, weight = 1500 kg
+      → W/M factor = max(9, 1.5) = 9 (volume wins)
+      Tarifa flete = $35/W·M → flete = 315
+      THC rate = $12/W·M, min = $33 → THC = 108  (108 > 33)
+      Margin = 20%
+      → venta flete = 378, venta THC = 129.60
+    """
+
+    def _abel(self, client, extra=None):
+        return _post_quote(client, {
+            "volume_cbm": "9.0",
+            "weight": "1500",
+            "weight_unit": "kg",
+            "flete_rate_lcl": "35",
+            "flete_lcl": "",
+            "thc_rate": "12",
+            "thc_min": "33",
+            "margin_pct": "20",
+            **(extra or {}),
+        })
+
+    def test_unit_rate_path_computes_flete_not_zero(self, client):
+        q = self._abel(client)
+        costeo = json.loads(q["costeo_json"])
+        assert costeo["flete_internacional_usd"] == pytest.approx(315.0, rel=0.01)
+
+    def test_factor_9_volume_wins(self, client):
+        q = self._abel(client)
+        costeo = json.loads(q["costeo_json"])
+        assert costeo["flete_factor"] == pytest.approx(9.0, rel=0.001)
+        assert costeo["flete_factor_unit"] == "m³"
+
+    def test_dimensions_path_also_gives_315(self, client):
+        q = _post_quote(client, {
+            "length_cm": "150", "width_cm": "200", "height_cm": "100",
+            "quantity": "3",
+            "weight": "1500", "weight_unit": "kg",
+            "flete_rate_lcl": "35", "flete_lcl": "",
+            "margin_pct": "20",
+        })
+        costeo = json.loads(q["costeo_json"])
+        assert costeo["flete_internacional_usd"] == pytest.approx(315.0, rel=0.01)
+
+    def test_thc_above_minimum(self, client):
+        # 12 × 9 = 108 > 33 → thc_usd = 108
+        q = self._abel(client)
+        costeo = json.loads(q["costeo_json"])
+        assert costeo["thc_usd"] == pytest.approx(108.0, rel=0.01)
+
+    def test_venta_flete_total_is_378(self, client):
+        # 35 × 9 × 1.20 = 378
+        q = self._abel(client)
+        venta = json.loads(q["venta_json"])
+        assert venta["line_items"][0]["total"] == pytest.approx(378.0, rel=0.01)
+
+    def test_venta_flete_unit_rate_is_42(self, client):
+        # unit_rate = 35 × 1.20 = 42
+        q = self._abel(client)
+        venta = json.loads(q["venta_json"])
+        assert venta["line_items"][0]["unit_rate"] == pytest.approx(42.0, rel=0.01)
+
+    def test_venta_flete_factor_value_is_9(self, client):
+        q = self._abel(client)
+        venta = json.loads(q["venta_json"])
+        assert venta["line_items"][0]["factor_value"] == pytest.approx(9.0, rel=0.001)
+
+    def test_venta_thc_total_is_129_60(self, client):
+        # 108 × 1.20 = 129.60
+        q = self._abel(client)
+        venta = json.loads(q["venta_json"])
+        thc = next(i for i in venta["line_items"] if "THC" in i["description"])
+        assert thc["total"] == pytest.approx(129.60, rel=0.01)
+
+    def test_costeo_rate_times_factor_equals_total(self, client):
+        q = self._abel(client)
+        costeo = json.loads(q["costeo_json"])
+        assert costeo["flete_internacional_usd"] == pytest.approx(
+            costeo["flete_rate_lcl"] * costeo["flete_factor"], rel=0.01
+        )
+
+    def test_unit_rate_overrides_flat_field(self, client):
+        # Both rate AND flat provided — rate wins, flat (999) must be ignored
+        q = _post_quote(client, {
+            "volume_cbm": "9.0", "weight": "1500", "weight_unit": "kg",
+            "flete_rate_lcl": "35", "flete_lcl": "999",
+            "margin_pct": "20",
+        })
+        costeo = json.loads(q["costeo_json"])
+        assert costeo["flete_internacional_usd"] == pytest.approx(315.0, rel=0.01)
+
+    def test_flat_field_used_when_no_rate(self, client):
+        # Regression: flat path still works when rate is blank
+        q = _post_quote(client, {
+            "volume_cbm": "9.0", "weight": "1500", "weight_unit": "kg",
+            "flete_rate_lcl": "", "flete_lcl": "400",
+            "margin_pct": "20",
+        })
+        costeo = json.loads(q["costeo_json"])
+        assert costeo["flete_internacional_usd"] == pytest.approx(400.0, rel=0.01)
+
+
 class TestAcusesRoute:
     def test_acuses_returns_200(self, client):
         resp = client.get("/acuses")
