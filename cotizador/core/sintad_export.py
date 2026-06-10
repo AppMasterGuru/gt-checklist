@@ -196,29 +196,54 @@ def generate_sintad_excel(quote: dict) -> bytes:
     # ── Sheet 2: Costos ──────────────────────────────────────────────────────
     ws2 = wb.create_sheet("Costos")
     ws2.column_dimensions["A"].width = 35
-    ws2.column_dimensions["B"].width = 20
+    ws2.column_dimensions["B"].width = 16
+    ws2.column_dimensions["C"].width = 12
+    ws2.column_dimensions["D"].width = 16
 
     t = ws2.cell(row=1, column=1, value=f"Costos — {ref}")
     t.font = Font(bold=True, size=13, color=_WHITE)
     t.fill = _hdr_fill(_ORANGE)
-    ws2.merge_cells("A1:B1")
+    ws2.merge_cells("A1:D1")
     t.alignment = Alignment(horizontal="center")
 
     note = ws2.cell(row=2, column=1,
                     value="⚠ SOLO INTERNO — No compartir con el cliente")
     note.font = Font(bold=True, color=_ORANGE)
-    ws2.merge_cells("A2:B2")
+    ws2.merge_cells("A2:D2")
+
+    flete_val    = costeo.get("flete_internacional_usd") or 0
+    flete_rate   = costeo.get("flete_rate_lcl") or 0
+    flete_factor = costeo.get("flete_factor")      # None for non-LCL
+    thc_usd_val  = costeo.get("thc_usd") or 0
+    thc_rate_val = costeo.get("thc_rate") or 0
+
+    # TN/M3 cell: numeric factor value (blank for non-LCL and non-W/M rows)
+    tn_m3_str = f"{flete_factor:.4g}" if flete_factor else ""
 
     costeo_rows = [
-        ["Flete Internacional (USD)",   costeo.get("flete_internacional_usd") or 0],
-        ["Visto Bueno (USD)",            costeo.get("visto_bueno_usd") or 0],
-        ["Agente de Aduana (USD)",       costeo.get("customs_agent_usd") or 0],
-        ["Transporte Local (USD)",       costeo.get("transport_usd") or 0],
-        ["Transporte Local (S/)",        costeo.get("transport_soles") or 0],
-        ["TOTAL COSTEO (USD)",           costeo.get("total_usd") or 0],
-        ["Tipo de Cambio SBS",           exc_rate],
+        [
+            "Flete Internacional (USD)",
+            flete_rate if flete_rate else flete_val,  # rate per W/M if available, else flat
+            tn_m3_str,
+            flete_val,
+        ],
     ]
-    _write_table(ws2, 4, ["Concepto", "Valor"], costeo_rows)
+    if thc_usd_val:
+        costeo_rows.append([
+            "THC / Terminal Handling (USD)",
+            thc_rate_val if thc_rate_val else thc_usd_val,
+            tn_m3_str,
+            thc_usd_val,
+        ])
+    costeo_rows += [
+        ["Visto Bueno (USD)",      costeo.get("visto_bueno_usd") or 0,   "", costeo.get("visto_bueno_usd") or 0],
+        ["Agente de Aduana (USD)", costeo.get("customs_agent_usd") or 0, "", costeo.get("customs_agent_usd") or 0],
+        ["Transporte Local (USD)", costeo.get("transport_usd") or 0,     "", costeo.get("transport_usd") or 0],
+        ["Transporte Local (S/)",  costeo.get("transport_soles") or 0,   "", ""],
+        ["TOTAL COSTEO (USD)",     costeo.get("total_usd") or 0,         "", costeo.get("total_usd") or 0],
+        ["Tipo de Cambio SBS",     exc_rate,                             "", ""],
+    ]
+    _write_table(ws2, 4, ["Concepto", "Costo", "TN/M3", "Total (USD)"], costeo_rows)
 
     # ── Sheet 3: Venta ───────────────────────────────────────────────────────
     ws3 = wb.create_sheet("Venta")
@@ -233,19 +258,45 @@ def generate_sintad_excel(quote: dict) -> bytes:
     ws3.merge_cells("A1:D1")
     t3.alignment = Alignment(horizontal="center")
 
-    venta_rows = [
-        [
-            item.get("description", ""),
-            item.get("quantity", 1),
-            item.get("unit_price", 0),
-            item.get("total", 0),
+    line_items  = venta.get("line_items", [])
+    has_factor  = any(i.get("factor_value") is not None for i in line_items)
+
+    if has_factor:
+        venta_rows = []
+        for item in line_items:
+            if item.get("factor_value") is not None:
+                fv = item.get("factor_value", 0)
+                venta_rows.append([
+                    item.get("description", ""),
+                    item.get("unit_rate", 0),
+                    f"{fv:.4g}" if fv else "",
+                    item.get("total", 0),
+                ])
+            else:
+                venta_rows.append([
+                    item.get("description", ""),
+                    item.get("unit_price", 0),
+                    "",
+                    item.get("total", 0),
+                ])
+        venta_rows.append(["TOTAL (USD)", "", "", venta.get("total_usd") or 0])
+        next_r = _write_table(ws3, 3,
+                              ["Concepto", "Tarifa", "TN/M3", "Total (USD)"],
+                              venta_rows)
+    else:
+        venta_rows = [
+            [
+                item.get("description", ""),
+                item.get("quantity", 1),
+                item.get("unit_price", 0),
+                item.get("total", 0),
+            ]
+            for item in line_items
         ]
-        for item in venta.get("line_items", [])
-    ]
-    venta_rows.append(["TOTAL (USD)", "", "", venta.get("total_usd") or 0])
-    next_r = _write_table(ws3, 3,
-                          ["Concepto", "Cant.", "Precio Unit. (USD)", "Total (USD)"],
-                          venta_rows)
+        venta_rows.append(["TOTAL (USD)", "", "", venta.get("total_usd") or 0])
+        next_r = _write_table(ws3, 3,
+                              ["Concepto", "Cant.", "Precio Unit. (USD)", "Total (USD)"],
+                              venta_rows)
 
     info = ws3.cell(row=next_r + 1, column=1,
                     value=f"Margen: {(venta.get('margin_pct') or 0) * 100:.1f}%"

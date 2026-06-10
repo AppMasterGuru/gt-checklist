@@ -39,7 +39,7 @@ def _build_items_html(line_items: list[dict]) -> tuple[str, str]:
             '<tr>'
             '<th>Concepto</th>'
             '<th class="num">Tarifa</th>'
-            '<th class="num">Factor</th>'
+            '<th class="num">TN/M3</th>'
             '<th class="num">Total</th>'
             '</tr>'
         )
@@ -64,7 +64,7 @@ def _build_items_html(line_items: list[dict]) -> tuple[str, str]:
             rows += (
                 f'<tr>'
                 f'<td>{desc}</td>'
-                f'<td class="num">USD {rate:,.2f}/{funit}</td>'
+                f'<td class="num">USD {rate:,.2f}/W·M</td>'
                 f'<td class="num">{fval:.4g} {funit}</td>'
                 f'<td class="num">USD {total:,.2f}</td>'
                 f'</tr>'

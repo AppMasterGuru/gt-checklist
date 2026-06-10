@@ -265,14 +265,28 @@ def create_quote():
         else float(f.get("volume_cbm", 0) or 0)
     )
 
-    flete_rate_lcl     = float(f.get("flete_rate_lcl") or 0)  # optional USD/W/M rate for LCL
-    if mode == "lcl" and flete_rate_lcl and (cbm or weight_kg):
-        wm_factor = round(max(cbm, weight_kg / 1000), 4)
+    # W/M factor — always computed for LCL (stored in costeo; used by SINTAD + TN/M3 display)
+    wm_factor = 0.0
+    flete_factor_unit = ""
+    if mode == "lcl" and (cbm or weight_kg):
+        _vol    = cbm or 0.0
+        _wt_ton = (weight_kg or 0.0) / 1000
+        wm_factor         = round(max(_vol, _wt_ton), 4)
+        flete_factor_unit = "m³" if _vol >= _wt_ton else "ton"
+
+    flete_rate_lcl = float(f.get("flete_rate_lcl") or 0)  # optional USD per W/M
+    if mode == "lcl" and flete_rate_lcl and wm_factor:
         flete_usd = round(flete_rate_lcl * wm_factor, 2)
     else:
         flete_rate_lcl = 0.0
-        wm_factor      = 0.0
         flete_usd      = float(f.get("flete_lcl") or f.get("flete_usd") or 0)
+
+    # THC — optional, from consolidator rate card (per W/M with minimum floor)
+    thc_rate = float(f.get("thc_rate") or 0)
+    thc_min  = float(f.get("thc_min") or 0)
+    thc_usd  = 0.0
+    if mode == "lcl" and thc_rate and wm_factor:
+        thc_usd = round(max(thc_rate * wm_factor, thc_min), 2)
     consolidator_name  = f.get("consolidator", "MSL").upper()
     airline            = f.get("airline", "").strip()   # aereo only
     requires_oea_basc  = f.get("requires_oea_basc") == "on"
@@ -314,11 +328,16 @@ def create_quote():
             handling_aereo_usd = fee["net_usd"]
             handling_aereo_info = fee
 
-    costeo_total = flete_usd + vb_usd + customs_usd + transport_usd + handling_aereo_usd
+    costeo_total = flete_usd + vb_usd + customs_usd + transport_usd + handling_aereo_usd + thc_usd
 
     costeo = {
         "flete_internacional_usd": flete_usd,
-        "flete_rate_lcl": flete_rate_lcl if flete_rate_lcl else None,
+        "flete_rate_lcl":   flete_rate_lcl   if flete_rate_lcl   else None,
+        "flete_factor":     wm_factor         if wm_factor        else None,
+        "flete_factor_unit": flete_factor_unit if flete_factor_unit else None,
+        "thc_rate":         thc_rate          if thc_rate         else None,
+        "thc_usd":          thc_usd           if thc_usd          else None,
+        "thc_min":          thc_min           if thc_min          else None,
         "visto_bueno_usd": vb_usd,
         "handling_aereo_usd": handling_aereo_usd,
         "handling_aereo_detail": handling_aereo_info,
@@ -341,7 +360,7 @@ def create_quote():
             "description": "International Freight",
             "unit_rate": round(flete_rate_lcl * m, 2),
             "factor_value": wm_factor,
-            "factor_unit": "W/M",
+            "factor_unit": flete_factor_unit,  # "m³" or "ton"
             "total": round(flete_usd * m, 2),
         }
     else:
@@ -367,6 +386,24 @@ def create_quote():
             "total": round(transport_usd * m, 2),
         },
     ]
+
+    if thc_usd:
+        if flete_rate_lcl:
+            venta_items.append({
+                "description": "THC / Terminal Handling",
+                "unit_rate": round(thc_rate * m, 2),
+                "factor_value": wm_factor,
+                "factor_unit": flete_factor_unit,
+                "total": round(thc_usd * m, 2),
+            })
+        else:
+            venta_items.append({
+                "description": "THC / Terminal Handling",
+                "quantity": 1,
+                "unit_price": round(thc_usd * m, 2),
+                "total": round(thc_usd * m, 2),
+            })
+
     venta_total = round(sum(item["total"] for item in venta_items), 2)
 
     venta = {
@@ -1190,10 +1227,17 @@ def _seed_demo_quotes() -> list[str]:
 
         costeo_total = flete_usd + vb_usd + customs_usd + transport_usd + handling_aereo_usd
         margin_pct   = max(spec["margin_pct"], MARGIN_FLOOR_LOCAL)
-        venta_total  = costeo_total * (1 + margin_pct)
+
+        # W/M factor for LCL seeds (stored so SINTAD export can populate TN/M3)
+        _seed_vol    = cbm or 0.0
+        _seed_wt_ton = (weight_kg or 0.0) / 1000
+        seed_wm_factor      = round(max(_seed_vol, _seed_wt_ton), 4) if mode == "lcl" else None
+        seed_factor_unit    = ("m³" if _seed_vol >= _seed_wt_ton else "ton") if mode == "lcl" else None
 
         costeo = {
             "flete_internacional_usd": flete_usd,
+            "flete_factor":      seed_wm_factor,
+            "flete_factor_unit": seed_factor_unit,
             "visto_bueno_usd":         vb_usd,
             "handling_aereo_usd":      handling_aereo_usd,
             "handling_aereo_detail":   handling_aereo_info,

@@ -155,7 +155,7 @@ class TestLclFleteRateFactorColumns:
         venta = json.loads(q["venta_json"])
         flete_item = venta["line_items"][0]
         assert flete_item.get("factor_value") == pytest.approx(2.0, rel=0.001)
-        assert flete_item.get("factor_unit") == "W/M"
+        assert flete_item.get("factor_unit") == "m³"
 
     def test_flete_rate_lcl_weight_greater(self, client):
         # weight 3000kg = 3.0 MT; volume 1.0 CBM → W/M = max(1.0, 3.0) = 3.0
@@ -234,6 +234,74 @@ class TestRequesterType:
 
 
 # ── /acuses route ─────────────────────────────────────────────────────────────
+
+class TestSintadTnM3:
+    def test_sintad_export_tn_m3_populated_for_lcl(self, client):
+        q = _post_quote(client, {"volume_cbm": "3.2", "weight": "850", "weight_unit": "kg", "flete_lcl": "275"})
+        costeo = json.loads(q["costeo_json"])
+        assert costeo.get("flete_factor") == pytest.approx(3.2, rel=0.001)
+        assert costeo.get("flete_factor_unit") == "m³"
+
+    def test_sintad_export_tn_m3_blank_for_fcl(self, client):
+        q = _post_quote(client, {"mode": "fcl", "flete_lcl": "2000", "flete_rate_lcl": "", "volume_cbm": "30"})
+        costeo = json.loads(q["costeo_json"])
+        assert costeo.get("flete_factor") is None
+
+    def test_sintad_export_tn_m3_blank_for_aereo(self, client):
+        q = _post_quote(client, {"mode": "aereo", "flete_lcl": "", "flete_usd": "1500",
+                                  "flete_rate_lcl": "", "consolidator": ""})
+        costeo = json.loads(q["costeo_json"])
+        assert costeo.get("flete_factor") is None
+
+    def test_lcl_flete_factor_volume_wins(self, client):
+        q = _post_quote(client, {"volume_cbm": "3.2", "weight": "850", "weight_unit": "kg", "flete_lcl": "100"})
+        costeo = json.loads(q["costeo_json"])
+        assert costeo["flete_factor"] == pytest.approx(3.2, rel=0.001)
+        assert costeo["flete_factor_unit"] == "m³"
+
+    def test_lcl_flete_factor_weight_wins(self, client):
+        q = _post_quote(client, {"volume_cbm": "1.0", "weight": "3000", "weight_unit": "kg", "flete_lcl": "100"})
+        costeo = json.loads(q["costeo_json"])
+        assert costeo["flete_factor"] == pytest.approx(3.0, rel=0.001)
+        assert costeo["flete_factor_unit"] == "ton"
+
+    def test_thc_minimum_floor_applied(self, client):
+        # thc_rate=12, W/M=2.0 → 24 < min 33 → thc_usd=33
+        q = _post_quote(client, {
+            "volume_cbm": "2.0", "weight": "500", "weight_unit": "kg",
+            "flete_lcl": "100", "thc_rate": "12", "thc_min": "33",
+        })
+        costeo = json.loads(q["costeo_json"])
+        assert costeo["thc_usd"] == pytest.approx(33.0, rel=0.01)
+
+    def test_thc_above_minimum_uses_computed(self, client):
+        # thc_rate=12, W/M=4.0 → 48 > min 33 → thc_usd=48
+        q = _post_quote(client, {
+            "volume_cbm": "4.0", "weight": "500", "weight_unit": "kg",
+            "flete_lcl": "100", "thc_rate": "12", "thc_min": "33",
+        })
+        costeo = json.loads(q["costeo_json"])
+        assert costeo["thc_usd"] == pytest.approx(48.0, rel=0.01)
+
+    def test_pdf_shows_tn_m3_column_for_lcl_rate(self, client, monkeypatch):
+        import api.routes as routes_mod
+        monkeypatch.setattr(routes_mod, "WEASYPRINT_AVAILABLE", False)
+        q = _post_quote(client, {
+            "flete_rate_lcl": "35", "flete_lcl": "",
+            "volume_cbm": "3.2", "weight": "850", "weight_unit": "kg",
+        })
+        resp = client.get(f"/quote/{q['reference_code']}/preview.pdf")
+        assert resp.status_code == 200
+        assert b"TN/M3" in resp.data
+
+    def test_pdf_no_tn_m3_column_for_flat_lcl(self, client, monkeypatch):
+        import api.routes as routes_mod
+        monkeypatch.setattr(routes_mod, "WEASYPRINT_AVAILABLE", False)
+        q = _post_quote(client, {"flete_lcl": "275", "flete_rate_lcl": ""})
+        resp = client.get(f"/quote/{q['reference_code']}/preview.pdf")
+        assert resp.status_code == 200
+        assert b"TN/M3" not in resp.data
+
 
 class TestAcusesRoute:
     def test_acuses_returns_200(self, client):

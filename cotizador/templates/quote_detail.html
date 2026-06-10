@@ -677,8 +677,27 @@
     <div class="detail-grid">
       <div class="detail-row">
         <span>Flete Internacional</span>
-        <strong>USD {{ "%.2f"|format(quote.costeo_json.flete_internacional_usd) }}</strong>
+        <strong>
+          {% if quote.mode == 'lcl' and quote.costeo_json.flete_factor %}
+            {% if quote.costeo_json.flete_rate_lcl %}
+              USD {{ "%.2f"|format(quote.costeo_json.flete_rate_lcl) }}/W·M
+              &nbsp;·&nbsp; <em>TN/M3:</em> {{ "%.4g"|format(quote.costeo_json.flete_factor) }} {{ quote.costeo_json.flete_factor_unit }}
+              &nbsp;=&nbsp; USD {{ "%.2f"|format(quote.costeo_json.flete_internacional_usd) }}
+            {% else %}
+              USD {{ "%.2f"|format(quote.costeo_json.flete_internacional_usd) }}
+              &nbsp;·&nbsp; <em>TN/M3:</em> {{ "%.4g"|format(quote.costeo_json.flete_factor) }} {{ quote.costeo_json.flete_factor_unit }}
+            {% endif %}
+          {% else %}
+            USD {{ "%.2f"|format(quote.costeo_json.flete_internacional_usd) }}
+          {% endif %}
+        </strong>
       </div>
+      {% if quote.costeo_json.thc_usd %}
+      <div class="detail-row">
+        <span>THC / Terminal Handling</span>
+        <strong>USD {{ "%.2f"|format(quote.costeo_json.thc_usd) }}</strong>
+      </div>
+      {% endif %}
       <div class="detail-row">
         <span>Visto Bueno ({{ quote.costeo_json.consolidator or '—' }})</span>
         <strong>USD {{ "%.2f"|format(quote.costeo_json.visto_bueno_usd) }}</strong>

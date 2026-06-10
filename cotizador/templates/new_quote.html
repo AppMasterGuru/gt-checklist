@@ -147,6 +147,15 @@
           <span class="field-hint">Si se ingresa, el flete = tarifa × max(CBM, kg/1000). Deja vacío para usar monto fijo.</span>
         </label>
         <label class="field">
+          <span class="label-text">THC Tarifa (USD/W/M) <em style="font-weight:normal;color:#6b7280;">opcional</em></span>
+          <input type="number" name="thc_rate" step="0.01" min="0" placeholder="Ej: 12.00">
+        </label>
+        <label class="field">
+          <span class="label-text">THC Mínimo (USD) <em style="font-weight:normal;color:#6b7280;">opcional</em></span>
+          <input type="number" name="thc_min" step="0.01" min="0" placeholder="Ej: 33.00">
+          <span class="field-hint">Si THC tarifa × TN/M3 &lt; mínimo, se cobra el mínimo.</span>
+        </label>
+        <label class="field">
           <span class="label-text">Consolidador (LCL)</span>
           <select name="consolidator">
             <option value="MSL">MSL — Visto bueno $180 + IGV</option>
