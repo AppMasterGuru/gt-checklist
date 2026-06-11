@@ -30,6 +30,23 @@ OUTPUT_DIR = Path(os.getenv("OUTPUT_DIR", "/tmp/gt_cotizador_output"))
 
 VALIDITY_DAYS = 15  # standard; Abel confirmed
 
+# Descriptions that identify local charges on quotes created before the is_local flag existed.
+_LOCAL_DESC = frozenset([
+    "visto bueno", "agente de aduana", "transporte local",
+    "handling aéreo", "handling aereo",
+])
+
+
+def _item_is_local(item: dict) -> bool:
+    """Return True if item belongs to the local-charges section.
+
+    Checks the is_local flag first; falls back to description matching so that
+    quotes created before the flag was introduced still split correctly.
+    """
+    if "is_local" in item:
+        return bool(item["is_local"])
+    return item.get("description", "").strip().lower() in _LOCAL_DESC
+
 
 def _template_for_lang(lang: str) -> Path:
     """Return the language-appropriate proforma template path."""
@@ -145,8 +162,8 @@ def render_html(venta: dict, meta: dict) -> str:
     validity_date = today + timedelta(days=VALIDITY_DAYS)
 
     line_items  = venta.get("line_items", [])
-    local_items = [i for i in line_items if i.get("is_local")]
-    intl_items  = [i for i in line_items if not i.get("is_local")]
+    local_items = [i for i in line_items if _item_is_local(i)]
+    intl_items  = [i for i in line_items if not _item_is_local(i)]
 
     intl_subtotal = sum(i.get("total") or 0 for i in intl_items)
     local_neto    = sum(i.get("total") or 0 for i in local_items)

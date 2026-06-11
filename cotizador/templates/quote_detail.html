@@ -636,8 +636,18 @@
   {% if quote.venta_json %}
   <section class="detail-section section-venta">
     <h2>Venta <span class="tag tag-client">→ Cliente</span></h2>
-    {% set local_items = quote.venta_json.line_items | selectattr('is_local') | list %}
-    {% set intl_items  = quote.venta_json.line_items | rejectattr('is_local') | list %}
+    {# Split items into local vs international, with fallback for pre-flag quotes #}
+    {% set _local_descs = ['Visto Bueno', 'Agente de Aduana', 'Transporte Local', 'Handling Aéreo'] %}
+    {% set ns = namespace(local_items=[], intl_items=[]) %}
+    {% for _item in quote.venta_json.line_items %}
+      {% if _item.is_local or (_item.is_local is not defined and _item.description in _local_descs) %}
+        {% set ns.local_items = ns.local_items + [_item] %}
+      {% else %}
+        {% set ns.intl_items = ns.intl_items + [_item] %}
+      {% endif %}
+    {% endfor %}
+    {% set local_items = ns.local_items %}
+    {% set intl_items  = ns.intl_items %}
     {% set has_factor  = quote.venta_json.line_items | selectattr('factor_value', 'defined') | selectattr('factor_value') | list | length > 0 %}
     {% set has_two_sections = local_items | length > 0 %}
 
