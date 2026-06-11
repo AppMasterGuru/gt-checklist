@@ -459,13 +459,15 @@ class TestDynamicLineItems:
         pu = next(i for i in venta["line_items"] if i["description"] == "Pick Up")
         assert pu["total"] == pytest.approx(216.0, rel=0.01)
 
-    def test_no_extra_items_legacy_mode(self, client):
-        # Backward compat: no extra_items → original Handling & Transport lines present
+    def test_no_extra_items_produces_section_flags(self, client):
+        # No extra_items → local charges emitted as separate flagged items
         q = _post_quote(client, {"flete_lcl": "315", "extra_items_json": "[]"})
         venta = json.loads(q["venta_json"])
-        descriptions = [i["description"] for i in venta["line_items"]]
-        assert "Handling & Port Fees" in descriptions
-        assert "Local Transport" in descriptions
+        intl_items  = [i for i in venta["line_items"] if i.get("is_international")]
+        local_items = [i for i in venta["line_items"] if i.get("is_local")]
+        assert any(i["description"] == "International Freight" for i in intl_items)
+        assert len(local_items) >= 1
+        assert all(i["igv_applicable"] for i in local_items)
 
     def test_extra_items_stored_in_costeo_json(self, client):
         q = _post_quote(client, {

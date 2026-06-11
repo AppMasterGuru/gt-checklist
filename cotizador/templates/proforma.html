@@ -169,6 +169,18 @@
       text-align: right;
     }
 
+    /* ── Section headers ── */
+    h3.charges-section-hdr {
+      font-size: 7.5pt;
+      text-transform: uppercase;
+      color: #E8471C;
+      font-weight: bold;
+      margin: 6px 0 3px 0;
+      letter-spacing: 0.4px;
+      border-bottom: 1px solid #E8471C;
+      padding-bottom: 2px;
+    }
+
     /* ── Footer notes ── */
     .notes-section {
       padding: 8px 14px;
@@ -277,16 +289,12 @@
   </div>
 </div>
 
-<!-- CHARGES TABLE -->
+<!-- CHARGES — two sections -->
 <div class="charges-section">
-  <h3>Cargos y Tarifas (USD)</h3>
-  <table class="charges">
-    <thead>
-      {{LINE_ITEMS_HEADER}}
-    </thead>
-    <tbody>
-      {{LINE_ITEMS}}
-    </tbody>
+  {{FLETE_TABLE}}
+  <div style="height:12px;"></div>
+  {{LOCAL_TABLE}}
+  <table class="charges" style="margin-top:4px;">
     <tfoot>
       <tr>
         <td colspan="3">TOTAL</td>

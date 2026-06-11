@@ -384,7 +384,9 @@ def create_quote():
     }
 
     m = 1 + margin_pct
-    handling_fees_costeo = vb_usd + customs_usd + handling_aereo_usd
+
+    _FLAGS_INTL  = {"is_international": True,  "is_local": False, "igv_applicable": False}
+    _FLAGS_LOCAL = {"is_international": False, "is_local": True,  "igv_applicable": True}
 
     # Ocean Freight — always present, always first
     if mode == "lcl" and flete_rate_lcl:
@@ -394,6 +396,7 @@ def create_quote():
             "factor_value": wm_factor,
             "factor_unit": flete_factor_unit,
             "total": round(flete_usd * m, 2),
+            **_FLAGS_INTL,
         }
     else:
         flete_item = {
@@ -401,6 +404,7 @@ def create_quote():
             "quantity": 1,
             "unit_price": round(flete_usd * m, 2),
             "total": round(flete_usd * m, 2),
+            **_FLAGS_INTL,
         }
 
     # THC — built once, appended only when > 0
@@ -413,6 +417,7 @@ def create_quote():
                 "factor_value": wm_factor,
                 "factor_unit": flete_factor_unit,
                 "total": round(thc_usd * m, 2),
+                **_FLAGS_INTL,
             }
         else:
             thc_venta_item = {
@@ -420,7 +425,43 @@ def create_quote():
                 "quantity": 1,
                 "unit_price": round(thc_usd * m, 2),
                 "total": round(thc_usd * m, 2),
+                **_FLAGS_INTL,
             }
+
+    # Local charges — always built as separate flagged items (both paths)
+    local_venta_items: list[dict] = []
+    if vb_usd > 0:
+        local_venta_items.append({
+            "description": "Visto Bueno",
+            "quantity": 1,
+            "unit_price": round(vb_usd * m, 2),
+            "total": round(vb_usd * m, 2),
+            **_FLAGS_LOCAL,
+        })
+    if customs_usd > 0:
+        local_venta_items.append({
+            "description": "Agente de Aduana",
+            "quantity": 1,
+            "unit_price": round(customs_usd * m, 2),
+            "total": round(customs_usd * m, 2),
+            **_FLAGS_LOCAL,
+        })
+    if handling_aereo_usd > 0:
+        local_venta_items.append({
+            "description": "Handling Aéreo",
+            "quantity": 1,
+            "unit_price": round(handling_aereo_usd * m, 2),
+            "total": round(handling_aereo_usd * m, 2),
+            **_FLAGS_LOCAL,
+        })
+    if transport_usd > 0:
+        local_venta_items.append({
+            "description": "Transporte Local",
+            "quantity": 1,
+            "unit_price": round(transport_usd * m, 2),
+            "total": round(transport_usd * m, 2),
+            **_FLAGS_LOCAL,
+        })
 
     if extra_costeo_items:
         # Dynamic mode: coloader-driven items — proforma mirrors what consolidator quoted
@@ -433,6 +474,7 @@ def create_quote():
                     "factor_value": ei["factor"],
                     "factor_unit": ei["factor_unit"],
                     "total": round(ei["total"] * m, 2),
+                    **_FLAGS_INTL,
                 })
             else:
                 venta_items.append({
@@ -440,28 +482,16 @@ def create_quote():
                     "quantity": 1,
                     "unit_price": round(ei["total"] * m, 2),
                     "total": round(ei["total"] * m, 2),
+                    **_FLAGS_INTL,
                 })
         if thc_venta_item:
             venta_items.append(thc_venta_item)
+        venta_items.extend(local_venta_items)
     else:
-        # Legacy mode: fixed handling + transport (backward-compat for quotes without extra items)
-        venta_items = [
-            flete_item,
-            {
-                "description": "Handling & Port Fees",
-                "quantity": 1,
-                "unit_price": round(handling_fees_costeo * m, 2),
-                "total": round(handling_fees_costeo * m, 2),
-            },
-            {
-                "description": "Local Transport",
-                "quantity": 1,
-                "unit_price": round(transport_usd * m, 2),
-                "total": round(transport_usd * m, 2),
-            },
-        ]
+        venta_items = [flete_item]
         if thc_venta_item:
             venta_items.append(thc_venta_item)
+        venta_items.extend(local_venta_items)
 
     venta_total = round(sum(item["total"] for item in venta_items), 2)
 

@@ -364,6 +364,22 @@
     body.vista-clasica .vista-toggle-btn .vista-label {
       color: #333;
     }
+
+    /* ── Two-section split ─────────────────────────────────────────────── */
+    .venta-section-hdr {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      color: #1B3A6B;
+      letter-spacing: 0.4px;
+      margin: 10px 0 4px 0;
+      padding-bottom: 3px;
+      border-bottom: 2px solid #E8471C;
+    }
+    body.vista-clasica .venta-section-hdr {
+      color: #000;
+      border-bottom: 1px solid #000;
+    }
   </style>
 </head>
 <body>
@@ -620,53 +636,139 @@
   {% if quote.venta_json %}
   <section class="detail-section section-venta">
     <h2>Venta <span class="tag tag-client">→ Cliente</span></h2>
-    {% set has_factor = quote.venta_json.line_items | selectattr('factor_value', 'defined') | selectattr('factor_value') | list | length > 0 %}
-    <table class="cost-table">
-      <thead>
-        <tr>
-          <th>Concepto</th>
-          {% if has_factor %}
-          <th class="num">Tarifa</th>
-          <th class="num">Factor</th>
-          {% else %}
-          <th class="num">Cant.</th>
-          <th class="num">Precio Unit.</th>
-          {% endif %}
-          <th class="num">Total</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for item in quote.venta_json.line_items %}
-        <tr>
-          <td>{{ item.description }}</td>
-          {% if has_factor %}
-            {% if item.factor_value is defined and item.factor_value %}
-            <td class="num">USD {{ "%.2f"|format(item.unit_rate or 0) }}/{{ item.factor_unit or 'W/M' }}</td>
-            <td class="num">{{ "%.4g"|format(item.factor_value) }} {{ item.factor_unit or 'W/M' }}</td>
+    {% set local_items = quote.venta_json.line_items | selectattr('is_local') | list %}
+    {% set intl_items  = quote.venta_json.line_items | rejectattr('is_local') | list %}
+    {% set has_factor  = quote.venta_json.line_items | selectattr('factor_value', 'defined') | selectattr('factor_value') | list | length > 0 %}
+    {% set has_two_sections = local_items | length > 0 %}
+
+    {% if has_two_sections %}
+      {# ── Section 1: Costos de Flete Internacional ── #}
+      <p class="venta-section-hdr">Costos de Flete Internacional</p>
+      <table class="cost-table">
+        <thead>
+          <tr>
+            <th>Concepto</th>
+            {% if has_factor %}<th class="num">Tarifa</th><th class="num">Factor</th>
+            {% else %}<th class="num">Cant.</th><th class="num">Precio Unit.</th>{% endif %}
+            <th class="num">Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in intl_items %}
+          <tr>
+            <td>{{ item.description }}</td>
+            {% if has_factor %}
+              {% if item.factor_value is defined and item.factor_value %}
+              <td class="num">USD {{ "%.2f"|format(item.unit_rate or 0) }}/{{ item.factor_unit or 'W/M' }}</td>
+              <td class="num">{{ "%.4g"|format(item.factor_value) }} {{ item.factor_unit or 'W/M' }}</td>
+              {% else %}<td class="num">—</td><td class="num">—</td>{% endif %}
             {% else %}
-            <td class="num">—</td>
-            <td class="num">—</td>
+            <td class="num">{{ item.quantity }}</td>
+            <td class="num">USD {{ "%.2f"|format(item.unit_price or 0) }}</td>
             {% endif %}
-          {% else %}
-          <td class="num">{{ item.quantity }}</td>
-          <td class="num">USD {{ "%.2f"|format(item.unit_price or 0) }}</td>
-          {% endif %}
-          <td class="num">USD {{ "%.2f"|format(item.total) }}</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-      <tfoot>
-        <tr class="total-row">
-          <td colspan="3"><strong>TOTAL</strong></td>
-          <td class="num"><strong>USD {{ "%.2f"|format(quote.venta_json.total_usd) }}</strong></td>
-        </tr>
-        <tr>
-          <td colspan="4" class="validity-note">
-            Validez: {{ quote.venta_json.validity_days }} días · Margen: {{ "%.1f"|format(quote.venta_json.margin_pct * 100) }}%
-          </td>
-        </tr>
-      </tfoot>
-    </table>
+            <td class="num">USD {{ "%.2f"|format(item.total) }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+        <tfoot>
+          <tr>
+            <td colspan="3"><strong>Subtotal Flete</strong></td>
+            <td class="num"><strong>USD {{ "%.2f"|format(intl_items | sum(attribute='total')) }}</strong></td>
+          </tr>
+        </tfoot>
+      </table>
+
+      {# ── Section 2: Gastos Locales ── #}
+      <div style="height:12px;"></div>
+      <p class="venta-section-hdr">Gastos Locales</p>
+      <table class="cost-table">
+        <thead>
+          <tr>
+            <th>Concepto</th>
+            <th class="num">Monto Neto</th>
+            <th class="num">IGV 18%</th>
+            <th class="num">Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in local_items %}
+          <tr>
+            <td>{{ item.description }}</td>
+            <td class="num">USD {{ "%.2f"|format(item.total) }}</td>
+            <td class="num">USD {{ "%.2f"|format(item.total * 0.18) }}</td>
+            <td class="num">USD {{ "%.2f"|format(item.total * 1.18) }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+        <tfoot>
+          {% set local_neto = local_items | sum(attribute='total') %}
+          <tr>
+            <td><strong>Subtotal Gastos Locales</strong></td>
+            <td class="num"><strong>USD {{ "%.2f"|format(local_neto) }}</strong></td>
+            <td class="num"><strong>USD {{ "%.2f"|format(local_neto * 0.18) }}</strong></td>
+            <td class="num"><strong>USD {{ "%.2f"|format(local_neto * 1.18) }}</strong></td>
+          </tr>
+        </tfoot>
+      </table>
+
+      {# ── Grand total ── #}
+      {% set intl_subtotal = intl_items | sum(attribute='total') %}
+      {% set local_total_incl_igv = (local_items | sum(attribute='total')) * 1.18 %}
+      <table class="cost-table" style="margin-top:4px;">
+        <tfoot>
+          <tr class="total-row">
+            <td colspan="3"><strong>TOTAL</strong></td>
+            <td class="num"><strong>USD {{ "%.2f"|format(intl_subtotal + local_total_incl_igv) }}</strong></td>
+          </tr>
+          <tr>
+            <td colspan="4" class="validity-note">
+              Validez: {{ quote.venta_json.validity_days }} días · Margen: {{ "%.1f"|format(quote.venta_json.margin_pct * 100) }}%
+            </td>
+          </tr>
+        </tfoot>
+      </table>
+
+    {% else %}
+      {# ── Legacy flat list (quotes without section flags) ── #}
+      <table class="cost-table">
+        <thead>
+          <tr>
+            <th>Concepto</th>
+            {% if has_factor %}<th class="num">Tarifa</th><th class="num">Factor</th>
+            {% else %}<th class="num">Cant.</th><th class="num">Precio Unit.</th>{% endif %}
+            <th class="num">Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in quote.venta_json.line_items %}
+          <tr>
+            <td>{{ item.description }}</td>
+            {% if has_factor %}
+              {% if item.factor_value is defined and item.factor_value %}
+              <td class="num">USD {{ "%.2f"|format(item.unit_rate or 0) }}/{{ item.factor_unit or 'W/M' }}</td>
+              <td class="num">{{ "%.4g"|format(item.factor_value) }} {{ item.factor_unit or 'W/M' }}</td>
+              {% else %}<td class="num">—</td><td class="num">—</td>{% endif %}
+            {% else %}
+            <td class="num">{{ item.quantity }}</td>
+            <td class="num">USD {{ "%.2f"|format(item.unit_price or 0) }}</td>
+            {% endif %}
+            <td class="num">USD {{ "%.2f"|format(item.total) }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+        <tfoot>
+          <tr class="total-row">
+            <td colspan="3"><strong>TOTAL</strong></td>
+            <td class="num"><strong>USD {{ "%.2f"|format(quote.venta_json.total_usd) }}</strong></td>
+          </tr>
+          <tr>
+            <td colspan="4" class="validity-note">
+              Validez: {{ quote.venta_json.validity_days }} días · Margen: {{ "%.1f"|format(quote.venta_json.margin_pct * 100) }}%
+            </td>
+          </tr>
+        </tfoot>
+      </table>
+    {% endif %}
   </section>
   {% endif %}
 
@@ -674,6 +776,9 @@
   {% if quote.costeo_json %}
   <section class="detail-section section-costeo">
     <h2>Costeo <span class="tag tag-internal">⚠ Solo Interno — No Enviar al Cliente</span></h2>
+
+    {# ── Section 1: Costos de Flete Internacional ── #}
+    <p class="venta-section-hdr">Costos de Flete Internacional</p>
     <div class="detail-grid">
       <div class="detail-row">
         <span>Flete Internacional</span>
@@ -712,21 +817,76 @@
         </div>
         {% endfor %}
       {% endif %}
-      <div class="detail-row">
-        <span>Visto Bueno ({{ quote.costeo_json.consolidator or '—' }})</span>
-        <strong>USD {{ "%.2f"|format(quote.costeo_json.visto_bueno_usd) }}</strong>
+      {# Subtotal flete #}
+      {% set flete_subtotal = quote.costeo_json.flete_internacional_usd + (quote.costeo_json.thc_usd or 0) %}
+      {% if quote.costeo_json.extra_items %}
+        {% for ei in quote.costeo_json.extra_items %}{% set flete_subtotal = flete_subtotal + ei.total %}{% endfor %}
+      {% endif %}
+      <div class="detail-row total-row" style="border-top:1px solid #ccc;">
+        <span><strong>Subtotal Flete</strong></span>
+        <strong>USD {{ "%.2f"|format(flete_subtotal) }}</strong>
       </div>
-      <div class="detail-row">
-        <span>Agente de Aduana ({{ quote.costeo_json.customs_agent }})</span>
-        <strong>USD {{ "%.2f"|format(quote.costeo_json.customs_agent_usd) }}</strong>
-      </div>
-      <div class="detail-row">
-        <span>Transporte Local</span>
-        <strong>
-          USD {{ "%.2f"|format(quote.costeo_json.transport_usd) }}
-          (S/ {{ "%.2f"|format(quote.costeo_json.transport_soles) }})
-        </strong>
-      </div>
+    </div>
+
+    {# ── Section 2: Gastos Locales ── #}
+    <div style="height:12px;"></div>
+    <p class="venta-section-hdr">Gastos Locales</p>
+    <table class="cost-table">
+      <thead>
+        <tr>
+          <th>Concepto</th>
+          <th class="num">Monto Neto</th>
+          <th class="num">IGV 18%</th>
+          <th class="num">Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% if quote.costeo_json.visto_bueno_usd %}
+        <tr>
+          <td>Visto Bueno ({{ quote.costeo_json.consolidator or '—' }})</td>
+          <td class="num">USD {{ "%.2f"|format(quote.costeo_json.visto_bueno_usd) }}</td>
+          <td class="num">USD {{ "%.2f"|format(quote.costeo_json.visto_bueno_usd * 0.18) }}</td>
+          <td class="num">USD {{ "%.2f"|format(quote.costeo_json.visto_bueno_usd * 1.18) }}</td>
+        </tr>
+        {% endif %}
+        {% if quote.costeo_json.customs_agent_usd %}
+        <tr>
+          <td>Agente de Aduana ({{ quote.costeo_json.customs_agent }})</td>
+          <td class="num">USD {{ "%.2f"|format(quote.costeo_json.customs_agent_usd) }}</td>
+          <td class="num">USD {{ "%.2f"|format(quote.costeo_json.customs_agent_usd * 0.18) }}</td>
+          <td class="num">USD {{ "%.2f"|format(quote.costeo_json.customs_agent_usd * 1.18) }}</td>
+        </tr>
+        {% endif %}
+        {% if quote.costeo_json.handling_aereo_usd %}
+        <tr>
+          <td>Handling Aéreo ({{ quote.costeo_json.airline or '—' }})</td>
+          <td class="num">USD {{ "%.2f"|format(quote.costeo_json.handling_aereo_usd) }}</td>
+          <td class="num">USD {{ "%.2f"|format(quote.costeo_json.handling_aereo_usd * 0.18) }}</td>
+          <td class="num">USD {{ "%.2f"|format(quote.costeo_json.handling_aereo_usd * 1.18) }}</td>
+        </tr>
+        {% endif %}
+        {% if quote.costeo_json.transport_usd %}
+        <tr>
+          <td>Transporte Local</td>
+          <td class="num">USD {{ "%.2f"|format(quote.costeo_json.transport_usd) }}
+            (S/ {{ "%.2f"|format(quote.costeo_json.transport_soles) }})</td>
+          <td class="num">USD {{ "%.2f"|format(quote.costeo_json.transport_usd * 0.18) }}</td>
+          <td class="num">USD {{ "%.2f"|format(quote.costeo_json.transport_usd * 1.18) }}</td>
+        </tr>
+        {% endif %}
+      </tbody>
+      <tfoot>
+        {% set local_neto = (quote.costeo_json.visto_bueno_usd or 0) + (quote.costeo_json.customs_agent_usd or 0) + (quote.costeo_json.handling_aereo_usd or 0) + (quote.costeo_json.transport_usd or 0) %}
+        <tr>
+          <td><strong>Subtotal Gastos Locales</strong></td>
+          <td class="num"><strong>USD {{ "%.2f"|format(local_neto) }}</strong></td>
+          <td class="num"><strong>USD {{ "%.2f"|format(local_neto * 0.18) }}</strong></td>
+          <td class="num"><strong>USD {{ "%.2f"|format(local_neto * 1.18) }}</strong></td>
+        </tr>
+      </tfoot>
+    </table>
+
+    <div class="detail-grid" style="margin-top:8px;">
       <div class="detail-row total-row">
         <span><strong>TOTAL COSTEO</strong></span>
         <strong>USD {{ "%.2f"|format(quote.costeo_json.total_usd) }}</strong>
@@ -736,6 +896,7 @@
         <strong>S/ {{ "%.4f"|format(quote.exchange_rate) }}</strong>
       </div>
     </div>
+
     {% if quote.costeo_json.transport_detail %}
     <p class="cost-note">
       Transporte: {{ quote.costeo_json.transport_detail.weight_kg }} kg /
