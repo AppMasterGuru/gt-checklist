@@ -128,7 +128,7 @@
         <label class="field">
           <span class="label-text">O ingrese CBM directo</span>
           <input type="number" name="volume_cbm" step="0.001" min="0" placeholder="0.576">
-          <span class="field-hint">Si ingresa dimensiones, el CBM se calcula automáticamente</span>
+          <span class="field-hint" id="cbm-hint">Fórmula marítima: L×A×H (cm) ÷ 1,000,000 × bultos = CBM (m³)</span>
         </label>
       </div>
     </section>
@@ -299,6 +299,58 @@
 
   modeSelect.addEventListener('change', applyModeVisibility);
   applyModeVisibility();
+})();
+
+(function () {
+  var lengthInp = document.querySelector('[name="length_cm"]');
+  var widthInp  = document.querySelector('[name="width_cm"]');
+  var heightInp = document.querySelector('[name="height_cm"]');
+  var qtyInp    = document.querySelector('[name="quantity"]');
+  var cbmInp    = document.querySelector('[name="volume_cbm"]');
+  var modeEl    = document.getElementById('mode-select');
+  var hint      = document.getElementById('cbm-hint');
+
+  var manualOverride = false;
+
+  function hintText(mode) {
+    if (manualOverride) return 'Valor ingresado manualmente (cálculo automático desactivado).';
+    if (mode === 'aereo') return 'Fórmula aérea: L×A×H (cm) × bultos ÷ 6,000 = Peso Volumétrico (kg)';
+    return 'Fórmula marítima: L×A×H (cm) ÷ 1,000,000 × bultos = CBM (m³)';
+  }
+
+  function recalc() {
+    if (manualOverride) return;
+    var l   = parseFloat(lengthInp.value) || 0;
+    var w   = parseFloat(widthInp.value)  || 0;
+    var h   = parseFloat(heightInp.value) || 0;
+    var qty = parseFloat(qtyInp.value)    || 1;
+    var mode = modeEl.value;
+    hint.textContent = hintText(mode);
+    if (l <= 0 || w <= 0 || h <= 0) return;
+    var result = (mode === 'aereo')
+      ? (l * w * h * qty) / 6000
+      : (l * w * h / 1000000) * qty;
+    cbmInp.value = result.toFixed(3);
+  }
+
+  cbmInp.addEventListener('input', function () {
+    manualOverride = true;
+    hint.textContent = hintText(modeEl.value);
+  });
+
+  [lengthInp, widthInp, heightInp, qtyInp].forEach(function (inp) {
+    inp.addEventListener('input', function () {
+      manualOverride = false;
+      recalc();
+    });
+  });
+
+  modeEl.addEventListener('change', function () {
+    hint.textContent = hintText(modeEl.value);
+    if (!manualOverride) recalc();
+  });
+
+  hint.textContent = hintText(modeEl.value);
 })();
 </script>
 </body>
