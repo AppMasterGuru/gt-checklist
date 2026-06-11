@@ -918,9 +918,14 @@
       {% if quote.status in ('APPROVED', 'SENT') %}
       <a href="{{ url_for('cotizador.sintad_export', ref_code=quote.reference_code) }}"
          class="btn btn-secondary">📊 Exportar a SINTAD</a>
+      <a href="{{ url_for('cotizador.preview_pdf', ref_code=quote.reference_code) }}"
+         class="btn btn-secondary" target="_blank">📄 Descargar PDF</a>
       {% else %}
       <button class="btn btn-secondary" disabled title="Solo disponible cuando la cotización está aprobada">
         📊 Exportar a SINTAD
+      </button>
+      <button class="btn btn-secondary" disabled title="Solo disponible cuando la cotización está aprobada">
+        📄 Descargar PDF
       </button>
       {% endif %}
     </div>
