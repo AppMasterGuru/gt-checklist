@@ -35,6 +35,69 @@
     }
     .pkg-row .pkg-cbm { background: #f3f4f6; color: #374151; cursor: default; }
     .pkg-del { padding: 6px 8px !important; font-size: 13px !important; }
+
+    /* Two-bucket section styles */
+    .sub-section-hdr {
+      font-size: 14px;
+      font-weight: 600;
+      color: #1B3A6B;
+      margin: 0 0 4px;
+      padding: 6px 10px;
+      background: #f0f4fb;
+      border-left: 3px solid #1B3A6B;
+      border-radius: 0 4px 4px 0;
+    }
+    .sub-section-hdr .igv-badge {
+      font-weight: 400;
+      color: #6b7280;
+      font-size: 12px;
+      margin-left: 6px;
+    }
+    .sub-section-divider {
+      margin: 16px 0;
+      border: none;
+      border-top: 1px solid #e5e7eb;
+    }
+
+    /* CIF calculator block */
+    .cif-block {
+      margin-top: 8px;
+      padding: 10px;
+      background: #fef9f0;
+      border: 1px solid #fed7aa;
+      border-radius: 6px;
+    }
+    .cif-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .cif-result-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    .cif-label { font-size: 11px; color: #92400e; font-weight: 600; margin-bottom: 3px; }
+    .cif-block input[type="number"] {
+      width: 100%;
+      padding: 7px 8px;
+      border: 1px solid #fed7aa;
+      border-radius: 5px;
+      font-size: 13px;
+      box-sizing: border-box;
+      font-family: inherit;
+    }
+    .cif-result {
+      background: #f3f4f6;
+      padding: 7px 8px;
+      border-radius: 5px;
+      font-size: 13px;
+      font-weight: 600;
+      color: #1B3A6B;
+      border: 1px solid #e5e7eb;
+    }
+    .confirm-abel { font-size: 10px; color: #92400e; font-style: italic; margin-left: 3px; }
   </style>
 </head>
 <body>
@@ -76,6 +139,13 @@
           </select>
         </label>
         <label class="field">
+          <span class="label-text">Operación *</span>
+          <select name="operation" id="operation-select" required>
+            <option value="exportacion" selected>Exportación</option>
+            <option value="importacion">Importación</option>
+          </select>
+        </label>
+        <label class="field">
           <span class="label-text">Modo *</span>
           <select name="mode" id="mode-select" required>
             <option value="lcl">LCL — Carga Suelta</option>
@@ -87,14 +157,14 @@
           <span class="label-text">Incoterm *</span>
           <select name="incoterm" required>
             <option value="FOB">FOB — Free On Board</option>
-            <option value="CIF">CIF — Cost, Insurance & Freight</option>
+            <option value="CIF">CIF — Cost, Insurance &amp; Freight</option>
             <option value="DDP">DDP — Delivered Duty Paid</option>
             <option value="EXW">EXW — Ex Works</option>
             <option value="DAP">DAP — Delivered At Place</option>
             <option value="CFR">CFR — Cost and Freight</option>
             <option value="FCA">FCA — Free Carrier</option>
             <option value="CPT">CPT — Carriage Paid To</option>
-            <option value="CIP">CIP — Carriage & Insurance Paid</option>
+            <option value="CIP">CIP — Carriage &amp; Insurance Paid</option>
             <option value="DDU">DDU — Delivered Duty Unpaid</option>
           </select>
         </label>
@@ -189,12 +259,13 @@
         </label>
         <label class="field" id="row-consolidador">
           <span class="label-text">Consolidador (LCL)</span>
-          <select name="consolidator">
-            <option value="MSL">MSL — Visto bueno $180 + IGV</option>
-            <option value="KRAFT">Kraft — Visto bueno $160 + IGV</option>
-            <option value="SACO">Saco — Visto bueno $190 + IGV</option>
-            <option value="EQ">EQ — Visto bueno $170 + IGV</option>
+          <select name="consolidator" id="consolidator-select">
+            <option value="MSL">MSL</option>
+            <option value="KRAFT">Kraft</option>
+            <option value="SACO">Saco</option>
+            <option value="EQ">EQ</option>
           </select>
+          <span class="field-hint" id="vb-hint"></span>
         </label>
         <label class="field" id="row-aerolinea">
           <span class="label-text">Aerolínea (Aéreo)</span>
@@ -228,15 +299,30 @@
       </div>
     </section>
 
-    <!-- SECTION 4: Conceptos adicionales del coloader -->
+    <!-- SECTION 4: Conceptos adicionales — split into Internacional / Local -->
     <section class="form-section">
       <h2>4. Conceptos adicionales del coloader <span style="font-weight:normal;color:#6b7280;font-size:14px;">opcional</span></h2>
-      <p class="field-hint" style="margin-bottom:12px;">
-        Agrega las líneas que el coloader incluyó en su cotización (ej. Pick Up, Gastos FCA, Customs).
-        Ocean Freight y THC se agregan automáticamente desde la sección anterior.
+      <p class="field-hint" style="margin-bottom:14px;">
+        Flete Internacional y THC se agregan automáticamente desde la sección anterior.
+        Agrega aquí los conceptos adicionales organizados por sección del proforma.
       </p>
-      <div id="extra-rows"></div>
-      <button type="button" class="btn btn-secondary" id="add-concepto-btn" style="margin-top:8px;">+ Agregar concepto</button>
+
+      <!-- Bucket A: Gastos de Flete Internacional (sin IGV) -->
+      <div style="margin-bottom:8px;">
+        <div class="sub-section-hdr">Gastos de Flete Internacional <span class="igv-badge">sin IGV</span></div>
+        <div id="intl-rows" style="margin-top:8px;"></div>
+        <button type="button" class="btn btn-secondary" id="add-intl-btn" style="margin-top:8px;">+ Agregar concepto internacional</button>
+      </div>
+
+      <hr class="sub-section-divider">
+
+      <!-- Bucket B: Gastos Locales (+ IGV 18%) -->
+      <div style="margin-bottom:8px;">
+        <div class="sub-section-hdr">Gastos Locales <span class="igv-badge">+ IGV 18%</span></div>
+        <div id="local-rows" style="margin-top:8px;"></div>
+        <button type="button" class="btn btn-secondary" id="add-local-btn" style="margin-top:8px;">+ Agregar concepto local</button>
+      </div>
+
       <input type="hidden" name="extra_items_json" id="extra_items_json" value="[]">
     </section>
 
@@ -268,73 +354,283 @@
 </footer>
 
 <script>
+// ── Section 4: Two-bucket extra items + CIF calculator (Feature 3, 4, 5) ─────
 (function () {
   var nextId = 0;
 
-  function addConcepto() {
-    var id = nextId++;
-    var div = document.createElement('div');
-    div.id = 'extra-' + id;
-    div.className = 'extra-row form-grid';
-    div.style.cssText = 'margin-bottom:10px;padding:12px;border:1px solid #e5e7eb;border-radius:6px;background:#f9fafb;';
-    div.innerHTML =
-      '<label class="field"><span class="label-text">Concepto</span>' +
-      '<input type="text" class="xc" placeholder="Ej: Pick Up, Gastos FCA, Customs"></label>' +
+  // VB net rates by consolidator × operation — mirrors transport.py CONSOLIDATORS.
+  // MSL import=90/export=160 confirmed by Abel 2026-06-12.
+  // KRAFT/SACO/EQ import rates are placeholders — confirm with Abel/Vania.
+  var VB_RATES = {
+    MSL:   { exportacion: 160, importacion: 90 },
+    KRAFT: { exportacion: 160, importacion: 160 },
+    SACO:  { exportacion: 190, importacion: 190 },
+    EQ:    { exportacion: 170, importacion: 170 }
+  };
+
+  function currentOperation() {
+    return (document.getElementById('operation-select') || {}).value || 'exportacion';
+  }
+
+  // Update the VB hint in Section 3 whenever consolidator or operation changes
+  function updateVbHint() {
+    var hint = document.getElementById('vb-hint');
+    if (!hint) return;
+    var cons = (document.getElementById('consolidator-select') || {}).value || 'MSL';
+    var op   = currentOperation();
+    var net  = (VB_RATES[cons] || {})[op];
+    hint.textContent = net !== undefined
+      ? 'Visto Bueno neto: USD ' + net + ' (IGV aplicado una sola vez en PDF)'
+      : '';
+  }
+
+  // ── CIF calculator helpers ─────────────────────────────────────────────────
+
+  function recalcCif(row) {
+    var cifEl = row.querySelector('.xcif');
+    var pcEl  = row.querySelector('.xcif-pct-costo');
+    var pvEl  = row.querySelector('.xcif-pct-venta');
+    var minEl = row.querySelector('.xcif-min');
+    var crEl  = row.querySelector('.xcif-costo-result');
+    var vrEl  = row.querySelector('.xcif-venta-result');
+    if (!cifEl || !crEl) return;
+    var cif  = parseFloat(cifEl.value) || 0;
+    var pc   = parseFloat(pcEl && pcEl.value) || 0;
+    var pv   = parseFloat(pvEl && pvEl.value) || 0;
+    var minU = parseFloat(minEl && minEl.value) || 0;
+    var costo = Math.max(minU, (pc / 100) * cif);
+    var venta = Math.max(minU, (pv / 100) * cif);
+    crEl.textContent = cif > 0 ? 'USD ' + costo.toFixed(2) : '—';
+    vrEl.textContent = cif > 0 ? 'USD ' + venta.toFixed(2) : '—';
+  }
+
+  // ── Row builder ────────────────────────────────────────────────────────────
+
+  function makeRow(bucket, prefill) {
+    var id     = nextId++;
+    var isCif  = (bucket === 'local') && prefill && prefill.cif_calc;
+    var div    = document.createElement('div');
+    div.id          = 'extra-' + id;
+    div.className   = 'extra-row form-grid';
+    div.dataset.bucket  = bucket;
+    div.dataset.cifCalc = isCif ? '1' : '0';
+    div.style.cssText   = 'margin-bottom:10px;padding:12px;border:1px solid #e5e7eb;border-radius:6px;background:#f9fafb;position:relative;';
+
+    var concept = (prefill && prefill.concept) ? prefill.concept : '';
+    var valor   = (prefill && prefill.valor   !== undefined && prefill.valor !== null)   ? prefill.valor   : '';
+    var factor  = (prefill && prefill.factor  !== undefined && prefill.factor !== null)  ? prefill.factor  : '';
+    var minUsd  = (prefill && prefill.min_usd !== undefined && prefill.min_usd !== null) ? prefill.min_usd : '';
+
+    // CIF toggle only available on local bucket rows
+    var cifToggleHtml = bucket === 'local'
+      ? '<label class="field" style="align-self:center;">' +
+        '<span class="label-text">Modo</span>' +
+        '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;margin-top:6px;">' +
+        '<input type="checkbox" class="xcif-toggle"' + (isCif ? ' checked' : '') + '>' +
+        '<span style="font-size:13px;">Calculadora CIF</span>' +
+        '</label></label>'
+      : '';
+
+    // Standard amount/factor fields
+    var stdHtml =
       '<label class="field"><span class="label-text">Valor (USD)</span>' +
-      '<input type="number" class="xv" step="0.01" min="0" placeholder="180.00"></label>' +
+      '<input type="number" class="xv" step="0.01" min="0" value="' + valor + '" placeholder="0.00"></label>' +
       '<label class="field"><span class="label-text">Factor TN/M3 <em style="font-weight:normal;color:#6b7280;">opt.</em></span>' +
-      '<input type="number" class="xf" step="0.001" min="0" placeholder="—">' +
+      '<input type="number" class="xf" step="0.001" min="0" value="' + factor + '" placeholder="—">' +
       '<span class="field-hint">Vacío = monto fijo</span></label>' +
       '<label class="field"><span class="label-text">Mínimo USD <em style="font-weight:normal;color:#6b7280;">opt.</em></span>' +
-      '<input type="number" class="xm" step="0.01" min="0" placeholder="—"></label>' +
+      '<input type="number" class="xm" step="0.01" min="0" value="' + minUsd + '" placeholder="—"></label>';
+
+    // CIF calculator block (local only) — pct defaults confirmed by Abel (ask Abel/Vania)
+    var pctCosto = (prefill && prefill.pct_costo !== undefined) ? prefill.pct_costo : 0.30;
+    var pctVenta = (prefill && prefill.pct_venta !== undefined) ? prefill.pct_venta : 0.35;
+    var cifMin   = (prefill && prefill.min_usd   !== undefined) ? prefill.min_usd   : 100;
+    var cifHtml = bucket === 'local'
+      ? '<div class="xcif-wrapper" style="grid-column:1/-1;display:' + (isCif ? 'block' : 'none') + ';">' +
+        '<div class="cif-block">' +
+        '<div class="cif-row">' +
+        '<div><div class="cif-label">Valor CIF (USD)</div>' +
+        '<input type="number" class="xcif" step="0.01" min="0" placeholder="50000"></div>' +
+        '<div><div class="cif-label">% Costo <span class="confirm-abel">confirmar c/Abel</span></div>' +
+        '<input type="number" class="xcif-pct-costo" step="0.001" min="0" value="' + pctCosto + '"></div>' +
+        '<div><div class="cif-label">% Venta <span class="confirm-abel">confirmar c/Abel</span></div>' +
+        '<input type="number" class="xcif-pct-venta" step="0.001" min="0" value="' + pctVenta + '"></div>' +
+        '<div><div class="cif-label">Mínimo USD <span class="confirm-abel">confirmar c/Abel</span></div>' +
+        '<input type="number" class="xcif-min" step="0.01" min="0" value="' + cifMin + '"></div>' +
+        '</div>' +
+        '<div class="cif-result-row">' +
+        '<div><div class="cif-label">Costo Neto (calculado)</div><div class="cif-result xcif-costo-result">—</div></div>' +
+        '<div><div class="cif-label">Venta Neto (calculado)</div><div class="cif-result xcif-venta-result">—</div></div>' +
+        '</div></div></div>'
+      : '';
+
+    div.innerHTML =
+      '<label class="field"><span class="label-text">Concepto</span>' +
+      '<input type="text" class="xc" value="' + concept + '" placeholder="Ej: Pick Up, BL, Almacén"></label>' +
+      cifToggleHtml +
+      '<div class="xstd-wrapper" style="display:' + (isCif ? 'none' : 'contents') + '">' + stdHtml + '</div>' +
+      cifHtml +
       '<div class="field" style="align-self:flex-end;">' +
-      '<button type="button" class="btn btn-secondary" onclick="removeConcepto(' + id + ')" style="margin-top:24px;">✕ Quitar</button></div>';
-    document.getElementById('extra-rows').appendChild(div);
-    div.querySelectorAll('input').forEach(function (inp) { inp.addEventListener('input', syncJson); });
+      '<button type="button" class="btn btn-secondary" onclick="window._removeExtra(' + id + ')" style="margin-top:24px;">✕ Quitar</button></div>';
+
+    // Wire CIF toggle
+    var toggle = div.querySelector('.xcif-toggle');
+    if (toggle) {
+      toggle.addEventListener('change', function () {
+        var on = toggle.checked;
+        div.dataset.cifCalc = on ? '1' : '0';
+        var stdW = div.querySelector('.xstd-wrapper');
+        var cifW = div.querySelector('.xcif-wrapper');
+        if (stdW) stdW.style.display = on ? 'none' : 'contents';
+        if (cifW) cifW.style.display = on ? 'block' : 'none';
+        if (on) recalcCif(div);
+        syncJson();
+      });
+    }
+
+    // Wire live inputs
+    div.querySelectorAll('.xcif, .xcif-pct-costo, .xcif-pct-venta, .xcif-min').forEach(function (inp) {
+      inp.addEventListener('input', function () { recalcCif(div); syncJson(); });
+    });
+    div.querySelectorAll('.xc, .xv, .xf, .xm').forEach(function (inp) {
+      inp.addEventListener('input', syncJson);
+    });
+
+    if (isCif) recalcCif(div);
+    return div;
   }
 
-  function removeConcepto(id) {
+  function addIntl(prefill) {
+    document.getElementById('intl-rows').appendChild(makeRow('intl', prefill || null));
+    syncJson();
+  }
+
+  function addLocal(prefill) {
+    document.getElementById('local-rows').appendChild(makeRow('local', prefill || null));
+    syncJson();
+  }
+
+  window._removeExtra = function (id) {
     var el = document.getElementById('extra-' + id);
     if (el) { el.remove(); syncJson(); }
-  }
+  };
 
+  // ── syncJson: serialize all rows to hidden field ───────────────────────────
   function syncJson() {
     var items = [];
     document.querySelectorAll('.extra-row').forEach(function (row) {
-      var concept = row.querySelector('.xc').value.trim();
-      var valor = parseFloat(row.querySelector('.xv').value) || 0;
-      var fv = row.querySelector('.xf').value;
-      var mv = row.querySelector('.xm').value;
-      var factor = fv ? (parseFloat(fv) || null) : null;
-      var min_usd = mv ? (parseFloat(mv) || null) : null;
-      if (concept && valor > 0) {
-        items.push({ concept: concept, valor: valor, factor: factor, min_usd: min_usd });
+      var bucket  = row.dataset.bucket || 'intl';
+      var concept = (row.querySelector('.xc') || {}).value || '';
+      concept = concept.trim();
+      var isCif = row.dataset.cifCalc === '1';
+
+      if (isCif) {
+        var cifEl = row.querySelector('.xcif');
+        var pcEl  = row.querySelector('.xcif-pct-costo');
+        var pvEl  = row.querySelector('.xcif-pct-venta');
+        var minEl = row.querySelector('.xcif-min');
+        var cif   = parseFloat(cifEl && cifEl.value) || 0;
+        var pc    = parseFloat(pcEl && pcEl.value) || 0;
+        var pv    = parseFloat(pvEl && pvEl.value) || 0;
+        var minU  = parseFloat(minEl && minEl.value) || 0;
+        var costo = Math.max(minU, (pc / 100) * cif);
+        var venta = Math.max(minU, (pv / 100) * cif);
+        if (concept) {
+          items.push({
+            concept: concept, bucket: bucket, cif_calc: true,
+            cif_usd: cif, pct_costo: pc, pct_venta: pv, min_usd: minU,
+            valor: costo, venta_neto: venta, factor: null, total: costo
+          });
+        }
+      } else {
+        var valor  = parseFloat((row.querySelector('.xv') || {}).value) || 0;
+        var fv     = (row.querySelector('.xf') || {}).value || '';
+        var mv     = (row.querySelector('.xm') || {}).value || '';
+        var factor = fv ? (parseFloat(fv) || null) : null;
+        var minUsd = mv ? (parseFloat(mv) || null) : null;
+        if (concept && valor > 0) {
+          items.push({ concept: concept, bucket: bucket, valor: valor, factor: factor, min_usd: minUsd });
+        }
       }
     });
     document.getElementById('extra_items_json').value = JSON.stringify(items);
   }
 
-  document.getElementById('add-concepto-btn').addEventListener('click', addConcepto);
-  window.removeConcepto = removeConcepto;
+  // ── Default line items by operation (Feature 4) ────────────────────────────
+  // These default sets reflect LOCAL-CLIENT structure.
+  // AGENTE-INTERNACIONAL variant is pending spec from Abel — DO NOT add toggle now.
+  function populateDefaults(op) {
+    document.getElementById('intl-rows').innerHTML = '';
+    document.getElementById('local-rows').innerHTML = '';
+
+    if (op === 'importacion') {
+      // Internacional bucket defaults (import)
+      addIntl({ concept: 'Flete Internacional', valor: 0 });
+      addIntl({ concept: 'Pick Up',             valor: 0 });
+      addIntl({ concept: 'THC',                 valor: 0 });
+      addIntl({ concept: 'BL',                  valor: 0 });
+      addIntl({ concept: 'Customs Broker',       valor: 0 });
+      // Local bucket defaults (import)
+      addLocal({ concept: 'Visto Bueno',         valor: 90 });             // MSL import confirmed
+      addLocal({ concept: 'Desconsolidación',    valor: 25, factor: '' }); // per ton, factor TBD
+      addLocal({ concept: 'Almacén',             valor: 250 });
+      addLocal({ concept: 'Agente de Aduana',    cif_calc: true, pct_costo: 0.30, pct_venta: 0.35, min_usd: 100 });
+      addLocal({ concept: 'Operative Charge',    valor: 25 });
+      addLocal({ concept: 'Delivery',            valor: 0 });
+    } else {
+      // Export — Flete Internacional handled in Section 3
+      // Local bucket defaults (export)
+      addLocal({ concept: 'Visto Bueno',      valor: 160 }); // MSL export confirmed
+      addLocal({ concept: 'Agente de Aduana', valor: 50 });  // flat rate export (not CIF%)
+      addLocal({ concept: 'Operative Charge', valor: 25 });
+      addLocal({ concept: 'Delivery',         valor: 0 });
+    }
+    syncJson();
+  }
+
+  // ── Wire controls ──────────────────────────────────────────────────────────
+
+  var opSel   = document.getElementById('operation-select');
+  var consSel = document.getElementById('consolidator-select');
+
+  if (opSel) {
+    opSel.addEventListener('change', function () {
+      populateDefaults(opSel.value);
+      updateVbHint();
+    });
+  }
+  if (consSel) {
+    consSel.addEventListener('change', updateVbHint);
+  }
+
+  document.getElementById('add-intl-btn').addEventListener('click', function () { addIntl(null); });
+  document.getElementById('add-local-btn').addEventListener('click', function () { addLocal(null); });
+
+  // Init on page load
+  populateDefaults(currentOperation());
+  updateVbHint();
+
 })();
 
+// ── Mode visibility: consolidador / aerolínea rows ────────────────────────────
 (function () {
-  var modeSelect = document.getElementById('mode-select');
+  var modeSelect      = document.getElementById('mode-select');
   var rowConsolidador = document.getElementById('row-consolidador');
-  var rowAerolinea = document.getElementById('row-aerolinea');
+  var rowAerolinea    = document.getElementById('row-aerolinea');
 
   function applyModeVisibility() {
     var mode = modeSelect.value;
-    rowConsolidador.style.display = (mode === 'lcl') ? '' : 'none';
-    rowAerolinea.style.display = (mode === 'aereo') ? '' : 'none';
+    rowConsolidador.style.display = (mode === 'lcl')   ? '' : 'none';
+    rowAerolinea.style.display    = (mode === 'aereo') ? '' : 'none';
   }
 
   modeSelect.addEventListener('change', applyModeVisibility);
   applyModeVisibility();
 })();
 
+// ── Package dimensions calculator ─────────────────────────────────────────────
 (function () {
-  var pkgNextId  = 0;
+  var pkgNextId      = 0;
   var manualOverride = false;
   var modeEl    = document.getElementById('mode-select');
   var cbmDirect = document.getElementById('cbm-direct');
