@@ -17,6 +17,8 @@ Abel: "Para un LCL no cotizamos con la naviera de manera directa."
 
 from __future__ import annotations
 
+import warnings
+
 IGV = 0.18
 
 # ── Transport rate bands ─────────────────────────────────────────────────────
@@ -42,20 +44,53 @@ WEIGHT_BANDS: list[tuple[float, float]] = [
 ]
 
 # ── Consolidators (LCL only) ─────────────────────────────────────────────────
-# Visto bueno rates confirmed by Abel: Kraft $160, MSL $180, Saco $190 (+IGV)
-# EQ rate is a placeholder until Vania's rate card arrives.
+# NET visto bueno rates (pre-IGV). IGV applied once by the PDF/display layer.
+# MSL import=90/export=160 confirmed by Abel 2026-06-12.
+# KRAFT/SACO/EQ import rates are TODO placeholders — confirm with Abel/Vania.
 
 CONSOLIDATORS: dict[str, dict] = {
-    "MSL":   {"name": "MSL",   "visto_bueno_usd": 180.0},
-    "KRAFT": {"name": "Kraft", "visto_bueno_usd": 160.0},
-    "SACO":  {"name": "Saco",  "visto_bueno_usd": 190.0},
-    "EQ":    {"name": "EQ",    "visto_bueno_usd": 170.0},  # ASK VANIA: confirm rate
+    "MSL": {
+        "name": "MSL",
+        "visto_bueno_export_usd": 160.0,  # confirmed by Abel 2026-06-12
+        "visto_bueno_import_usd": 90.0,   # confirmed by Abel 2026-06-12
+    },
+    "KRAFT": {
+        "name": "Kraft",
+        "visto_bueno_export_usd": 160.0,
+        # TODO: confirm KRAFT import VB with Abel/Vania — using export rate as placeholder
+        "visto_bueno_import_usd": 160.0,
+    },
+    "SACO": {
+        "name": "Saco",
+        "visto_bueno_export_usd": 190.0,
+        # TODO: confirm SACO import VB with Abel/Vania — using export rate as placeholder
+        "visto_bueno_import_usd": 190.0,
+    },
+    "EQ": {
+        "name": "EQ",
+        "visto_bueno_export_usd": 170.0,
+        # TODO: confirm EQ import VB with Abel/Vania (ASK VANIA) — using export rate as placeholder
+        "visto_bueno_import_usd": 170.0,
+    },
 }
+
+# Warn at import time for consolidators where import VB is unconfirmed placeholder
+_UNCONFIRMED_IMPORT_VB = [
+    k for k, v in CONSOLIDATORS.items()
+    if v.get("visto_bueno_import_usd") == v.get("visto_bueno_export_usd") and k != "MSL"
+]
+if _UNCONFIRMED_IMPORT_VB:
+    warnings.warn(
+        "CONSOLIDATOR WARNING — visto_bueno_import_usd is a placeholder (= export rate) for: "
+        + ", ".join(_UNCONFIRMED_IMPORT_VB)
+        + ". Confirm with Abel/Vania before using these for import quotes.",
+        UserWarning,
+        stacklevel=1,
+    )
 
 # ── Customs agents ────────────────────────────────────────────────────────────
 # Abel: Alefero is default. OEA+BASC required for clients like Farmex.
-# "$70 commission + gastos operativos + 18% IGV = ~$59.23 total"
-# Note: after IGV on the net fees the total rounds to the figure Abel quoted.
+# commission_usd and gastos_usd are NET (pre-IGV). IGV applied once by PDF layer.
 
 CUSTOMS_AGENTS: dict[str, dict] = {
     "ALEFERO": {
@@ -128,12 +163,39 @@ def get_customs_agent(client_requires_oea_basc: bool = False) -> dict:
     return CUSTOMS_AGENTS["ALEFERO"]
 
 
+def visto_bueno_net_usd(consolidator: dict, operation: str = "exportacion") -> float:
+    """
+    Net visto bueno cost (pre-IGV). IGV is applied once by the PDF/display layer.
+
+    BUG FIX (2026-06-12): Correct local-item composition:
+      venta_neto = net × (1 + margin)
+      igv        = venta_neto × 0.18
+      total      = venta_neto + igv
+    IGV must NEVER be applied to an already-IGV-inclusive base.
+    """
+    if operation == "importacion":
+        return float(consolidator.get("visto_bueno_import_usd", 0.0))
+    return float(consolidator.get("visto_bueno_export_usd", 0.0))
+
+
+def customs_net_usd(agent: dict) -> float:
+    """
+    Net customs agent cost (pre-IGV). IGV applied once by PDF/display layer.
+
+    BUG FIX (2026-06-12): Previously customs_total_usd() returned IGV-inclusive
+    total, causing double-IGV (margin applied to IGV-inclusive base, then PDF
+    applied IGV again). Now returns net pre-IGV amount only.
+    """
+    return round(agent["commission_usd"] + agent["gastos_usd"], 4)
+
+
+# ── Legacy aliases (backward compat with any external callers) ────────────────
+
 def visto_bueno_total_usd(consolidator: dict) -> float:
-    """Visto bueno + IGV (USD)."""
-    return round(consolidator["visto_bueno_usd"] * (1 + IGV), 4)
+    """DEPRECATED: returns export net (pre-IGV). Use visto_bueno_net_usd() instead."""
+    return visto_bueno_net_usd(consolidator, operation="exportacion")
 
 
 def customs_total_usd(agent: dict) -> float:
-    """Customs agent: (commission + gastos) + IGV (USD)."""
-    subtotal = agent["commission_usd"] + agent["gastos_usd"]
-    return round(subtotal * (1 + IGV), 4)
+    """DEPRECATED: returns net (pre-IGV). Use customs_net_usd() instead."""
+    return customs_net_usd(agent)
