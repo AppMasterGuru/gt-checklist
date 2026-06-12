@@ -35,6 +35,7 @@ CREATE TABLE IF NOT EXISTS quotes (
     staff_code        TEXT    NOT NULL,
     language          TEXT    DEFAULT 'es',
     requester_type    TEXT    DEFAULT 'cliente',  -- 'cliente' | 'agente'
+    operation         TEXT    DEFAULT 'exportacion', -- 'exportacion' | 'importacion'
     created_at        TEXT    NOT NULL DEFAULT (datetime('now')),
     updated_at        TEXT    NOT NULL DEFAULT (datetime('now')),
     approved_by       TEXT,

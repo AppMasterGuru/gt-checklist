@@ -38,6 +38,11 @@ def init_db() -> None:
                 "ALTER TABLE quotes ADD COLUMN requester_type TEXT DEFAULT 'cliente'"
             )
             conn.commit()
+        if "operation" not in cols:
+            conn.execute(
+                "ALTER TABLE quotes ADD COLUMN operation TEXT DEFAULT 'exportacion'"
+            )
+            conn.commit()
         # New tables: providers + credit_registry (added 2026-05-15)
         # schema.sql handles CREATE TABLE IF NOT EXISTS; migrations only needed for
         # columns added to existing tables — these are brand-new tables, so no ALTER needed.
