@@ -116,13 +116,16 @@ class TestVbByConsolidatorAndOperation:
         cons = get_consolidator("MSL")
         assert visto_bueno_net_usd(cons) == visto_bueno_net_usd(cons, "exportacion")
 
-    def test_all_consolidators_have_both_rates(self):
+    def test_all_consolidators_have_rate_fields(self):
+        """All entries must have both rate keys. None means pending confirmation (not a bug)."""
         for key in CONSOLIDATORS:
             cons = CONSOLIDATORS[key]
-            assert "visto_bueno_export_usd" in cons, f"{key} missing export rate"
-            assert "visto_bueno_import_usd" in cons, f"{key} missing import rate"
-            assert cons["visto_bueno_export_usd"] > 0
-            assert cons["visto_bueno_import_usd"] > 0
+            assert "visto_bueno_export_usd" in cons, f"{key} missing export rate key"
+            assert "visto_bueno_import_usd" in cons, f"{key} missing import rate key"
+        # MSL is the only fully confirmed consolidator
+        msl = CONSOLIDATORS["MSL"]
+        assert msl["visto_bueno_export_usd"] == 160.0
+        assert msl["visto_bueno_import_usd"] == 90.0
 
 
 # ─── Feature 3: bucket tagging flows to correct PDF flags ────────────────────

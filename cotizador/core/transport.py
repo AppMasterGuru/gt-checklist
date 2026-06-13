@@ -11,12 +11,13 @@ From the demo (36:06 – 47:17):
 
 Costs are in soles (PEN). Converted to USD in the final quote via SBS rate.
 
-LCL uses consolidators (MSL, Craft, Saco, EQ) — NOT direct navieras.
+LCL uses consolidators (MSL, Craft, Saco, ECU Worldwide, Vanguard) — NOT direct navieras.
 Abel: "Para un LCL no cotizamos con la naviera de manera directa."
 """
 
 from __future__ import annotations
 
+import logging
 import warnings
 
 IGV = 0.18
@@ -45,8 +46,9 @@ WEIGHT_BANDS: list[tuple[float, float]] = [
 
 # ── Consolidators (LCL only) ─────────────────────────────────────────────────
 # NET visto bueno rates (pre-IGV). IGV applied once by the PDF/display layer.
+# None = rate not yet confirmed — quote must show blank VB + user warning.
 # MSL import=90/export=160 confirmed by Abel 2026-06-12.
-# CRAFT/SACO/EQ import rates are TODO placeholders — confirm with Abel/Vania.
+# All other import VBs are TODO — confirm with Abel/Vania before any import quote.
 
 CONSOLIDATORS: dict[str, dict] = {
     "MSL": {
@@ -57,33 +59,49 @@ CONSOLIDATORS: dict[str, dict] = {
     "CRAFT": {
         "name": "Craft",
         "visto_bueno_export_usd": 160.0,
-        # TODO: confirm CRAFT import VB with Abel/Vania — using export rate as placeholder
-        "visto_bueno_import_usd": 160.0,
+        "visto_bueno_import_usd": None,   # TODO: confirm with Abel/Vania
     },
     "SACO": {
         "name": "Saco",
         "visto_bueno_export_usd": 190.0,
-        # TODO: confirm SACO import VB with Abel/Vania — using export rate as placeholder
-        "visto_bueno_import_usd": 190.0,
+        "visto_bueno_import_usd": None,   # TODO: confirm with Abel/Vania
     },
     "EQ": {
-        "name": "EQ",
-        "visto_bueno_export_usd": 170.0,
-        # TODO: confirm EQ import VB with Abel/Vania (ASK VANIA) — using export rate as placeholder
-        "visto_bueno_import_usd": 170.0,
+        # Canonical key for ECU Worldwide. Aliases: "ECU", "ECU WORLDWIDE" → "EQ".
+        "name": "ECU Worldwide",
+        "visto_bueno_export_usd": 170.0,  # unverified — confirm with Abel/Vania
+        "visto_bueno_import_usd": None,   # TODO: confirm with Abel/Vania
+    },
+    "VANGUARD": {
+        "name": "Vanguard",
+        "visto_bueno_export_usd": None,   # no rate on file — pending confirmation
+        "visto_bueno_import_usd": None,   # no rate on file — pending confirmation
     },
 }
 
-# Warn at import time for consolidators where import VB is unconfirmed placeholder
-_UNCONFIRMED_IMPORT_VB = [
-    k for k, v in CONSOLIDATORS.items()
-    if v.get("visto_bueno_import_usd") == v.get("visto_bueno_export_usd") and k != "MSL"
-]
-if _UNCONFIRMED_IMPORT_VB:
+# ECU WORLDWIDE and ECU are both aliases for the EQ entry (same company, different name forms).
+_CONSOLIDATOR_ALIASES: dict[str, str] = {
+    "ECU WORLDWIDE": "EQ",
+    "ECU": "EQ",
+}
+
+# ── Startup warnings ──────────────────────────────────────────────────────────
+_MISSING_EXPORT_VB = [k for k, v in CONSOLIDATORS.items() if v.get("visto_bueno_export_usd") is None]
+_MISSING_IMPORT_VB = [k for k, v in CONSOLIDATORS.items() if v.get("visto_bueno_import_usd") is None]
+
+_startup_warnings: list[str] = []
+if _MISSING_EXPORT_VB:
+    _startup_warnings.append(
+        f"Exportación VB FALTANTE — sin tarifa confirmada: {', '.join(sorted(_MISSING_EXPORT_VB))}"
+    )
+if _MISSING_IMPORT_VB:
+    _startup_warnings.append(
+        f"Importación VB FALTANTE — sin tarifa confirmada: {', '.join(sorted(_MISSING_IMPORT_VB))}"
+    )
+if _startup_warnings:
     warnings.warn(
-        "CONSOLIDATOR WARNING — visto_bueno_import_usd is a placeholder (= export rate) for: "
-        + ", ".join(_UNCONFIRMED_IMPORT_VB)
-        + ". Confirm with Abel/Vania before using for import quotes.",
+        "CONSOLIDATOR WARNING:\n  " + "\n  ".join(_startup_warnings)
+        + "\nConfirmar con Abel/Vania antes de cotizar con estos consolidadores.",
         UserWarning,
         stacklevel=1,
     )
@@ -149,11 +167,19 @@ def calculate_transport(weight_kg: float, cbm: float) -> dict:
 
 def get_consolidator(name: str) -> dict:
     key = name.upper().strip()
+    key = _CONSOLIDATOR_ALIASES.get(key, key)
     if key not in CONSOLIDATORS:
         raise ValueError(
-            f"Unknown consolidator: {name!r}. Valid: {sorted(CONSOLIDATORS)}"
+            f"Unknown consolidator: {name!r}. Valid: {sorted(CONSOLIDATORS)} "
+            f"(aliases: {sorted(_CONSOLIDATOR_ALIASES)})"
         )
     return CONSOLIDATORS[key]
+
+
+def vb_rate_missing(consolidator: dict, operation: str = "exportacion") -> bool:
+    """True when the VB rate for this operation is None (unconfirmed — do not use silently)."""
+    rate_key = "visto_bueno_import_usd" if operation == "importacion" else "visto_bueno_export_usd"
+    return consolidator.get(rate_key) is None
 
 
 def get_customs_agent(client_requires_oea_basc: bool = False) -> dict:
@@ -167,15 +193,20 @@ def visto_bueno_net_usd(consolidator: dict, operation: str = "exportacion") -> f
     """
     Net visto bueno cost (pre-IGV). IGV is applied once by the PDF/display layer.
 
+    Returns 0.0 when the rate is None (unconfirmed). Callers should check
+    vb_rate_missing() first and warn the user before proceeding.
+
     BUG FIX (2026-06-12): Correct local-item composition:
       venta_neto = net × (1 + margin)
       igv        = venta_neto × 0.18
       total      = venta_neto + igv
     IGV must NEVER be applied to an already-IGV-inclusive base.
     """
-    if operation == "importacion":
-        return float(consolidator.get("visto_bueno_import_usd", 0.0))
-    return float(consolidator.get("visto_bueno_export_usd", 0.0))
+    rate_key = "visto_bueno_import_usd" if operation == "importacion" else "visto_bueno_export_usd"
+    rate = consolidator.get(rate_key)
+    if rate is None:
+        return 0.0
+    return float(rate)
 
 
 def customs_net_usd(agent: dict) -> float:

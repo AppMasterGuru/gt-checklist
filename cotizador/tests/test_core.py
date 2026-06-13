@@ -47,12 +47,15 @@ from core.incoterms import (
 )
 from core.transport import (
     CONSOLIDATORS,
+    _CONSOLIDATOR_ALIASES,
     calculate_transport,
     customs_total_usd,
     get_cbm_rate,
     get_consolidator,
     get_customs_agent,
     get_weight_rate,
+    vb_rate_missing,
+    visto_bueno_net_usd,
     visto_bueno_total_usd,
 )
 from core.exchange_rate import soles_to_usd, usd_to_soles
@@ -230,6 +233,36 @@ class TestTransport:
     def test_get_consolidator_unknown_raises(self):
         with pytest.raises(ValueError):
             get_consolidator("UNKNOWN_CO")
+
+    # ── Regression: missing-rate consolidator must never crash ────────────────
+
+    def test_get_consolidator_vanguard_no_crash(self):
+        """VANGUARD is approved but has no confirmed rates — must return dict, never raise."""
+        cons = get_consolidator("VANGUARD")  # must not raise
+        assert cons["name"] == "Vanguard"
+        assert cons["visto_bueno_export_usd"] is None
+        assert cons["visto_bueno_import_usd"] is None
+        assert vb_rate_missing(cons, "exportacion") is True
+        assert vb_rate_missing(cons, "importacion") is True
+        assert visto_bueno_net_usd(cons, "exportacion") == 0.0
+        assert visto_bueno_net_usd(cons, "importacion") == 0.0
+
+    def test_get_consolidator_ecu_aliases(self):
+        """ECU and ECU WORLDWIDE are aliases for the EQ canonical entry."""
+        assert "ECU WORLDWIDE" in _CONSOLIDATOR_ALIASES
+        assert "ECU" in _CONSOLIDATOR_ALIASES
+        eq   = get_consolidator("EQ")
+        ecu  = get_consolidator("ECU")
+        ecuw = get_consolidator("ECU WORLDWIDE")
+        assert eq is ecu
+        assert eq is ecuw
+        assert eq["name"] == "ECU Worldwide"
+
+    def test_visto_bueno_none_rate_returns_zero(self):
+        """visto_bueno_net_usd must handle None rates without crashing."""
+        dummy = {"visto_bueno_export_usd": None, "visto_bueno_import_usd": None}
+        assert visto_bueno_net_usd(dummy, "exportacion") == 0.0
+        assert visto_bueno_net_usd(dummy, "importacion") == 0.0
 
     def test_visto_bueno_returns_pre_igv_net(self):
         # Bug 1 fix: visto_bueno_total_usd now returns NET pre-IGV (alias for export).

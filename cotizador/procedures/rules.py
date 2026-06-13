@@ -152,7 +152,7 @@ def validate_cargo(cargo_description: str) -> tuple[bool, str]:
 # Source: Abel demo — GT only uses approved consolidators for LCL.
 
 APPROVED_LCL_CONSOLIDATORS: frozenset[str] = frozenset({
-    "MSL", "CRAFT", "SACO", "VANGUARD", "ECU WORLDWIDE",
+    "MSL", "CRAFT", "SACO", "VANGUARD", "ECU WORLDWIDE", "EQ",
 })
 
 

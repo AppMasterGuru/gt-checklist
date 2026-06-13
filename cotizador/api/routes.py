@@ -31,6 +31,7 @@ from __future__ import annotations
 import csv
 import io
 import json
+import logging
 import os
 import sqlite3
 from datetime import datetime, timedelta, timezone
@@ -61,6 +62,7 @@ from core.transport import (
     customs_net_usd,
     get_consolidator,
     get_customs_agent,
+    vb_rate_missing,
     visto_bueno_net_usd,
 )
 from core.units import cbm_from_cm, parse_weight
@@ -318,8 +320,17 @@ def create_quote():
         try:
             consolidator_info = get_consolidator(consolidator_name)
             vb_usd = visto_bueno_net_usd(consolidator_info, operation)
+            if vb_rate_missing(consolidator_info, operation):
+                cons_display = consolidator_info.get("name", consolidator_name)
+                logging.warning("VB rate missing for consolidator=%s operation=%s — quote proceeds with VB=0", consolidator_name, operation)
+                flash(
+                    f"Visto Bueno de {cons_display} pendiente de confirmación — "
+                    "ingresar manualmente antes de aprobar.",
+                    "warning",
+                )
         except ValueError:
-            flash(f"Unknown consolidator '{consolidator_name}' — defaulting to no visto bueno.", "warning")
+            logging.warning("Unknown consolidator %r submitted — VB set to 0", consolidator_name)
+            flash(f"Consolidador '{consolidator_name}' no reconocido — visto bueno no calculado.", "warning")
 
     # Air handling fee (aereo only) — looked up from HANDLING AEREO.xlsx
     handling_aereo_usd = 0.0
@@ -1369,8 +1380,10 @@ def _seed_demo_quotes() -> list[str]:
             try:
                 cons   = get_consolidator(spec["consolidator"])
                 vb_usd = visto_bueno_net_usd(cons, spec_op)
+                if vb_rate_missing(cons, spec_op):
+                    logging.warning("Demo seed: VB rate missing for %s/%s — VB=0", spec["consolidator"], spec_op)
             except ValueError:
-                pass
+                logging.warning("Demo seed: unknown consolidator %r — VB=0", spec["consolidator"])
 
         handling_aereo_usd  = 0.0
         handling_aereo_info: dict = {}
